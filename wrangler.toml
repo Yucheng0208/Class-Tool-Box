@@ -1,0 +1,18 @@
+# 課堂工具箱：抽籤、座位、小遊戲、隨機分組、白板（不用登入，名冊只存在老師自己的瀏覽器）
+# 靜態網站，沒有資料庫；src/worker.js 只負責「線上分享連結」匯入名冊的代抓
+name = "class-tool-box"
+main = "src/worker.js"
+compatibility_date = "2025-09-01"
+
+workers_dev = false
+routes = [
+  { pattern = "classtoolbox.yucheng208.net", custom_domain = true },
+  { pattern = "class-tool-box.yucheng208.net", custom_domain = true },
+  { pattern = "ctb.yucheng208.net", custom_domain = true }, # 短網址
+]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "404-page"
+run_worker_first = ["/api/*"]

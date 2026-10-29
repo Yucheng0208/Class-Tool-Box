@@ -1,0 +1,17 @@
+{
+  "name": "class-tool-box",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "mathjax": "^3.2.2",
+    "wrangler": "^4.155.0",
+    "xlsx": "^0.18.5"
+  },
+  "allowScripts": {
+    "workerd@1.20261023.1": true
+  }
+}

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 76" width="64" height="76">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e9f392"/>
+      <stop offset=".45" stop-color="#6accdb"/>
+      <stop offset="1" stop-color="#3fb1f8"/>
+    </linearGradient>
+  </defs>
+  <!-- 腳 -->
+  <path d="M25 58l-7 11M39 58l6 11" stroke="#12303f" stroke-width="4" stroke-linecap="round"/>
+  <ellipse cx="16" cy="70" rx="6" ry="3.2" fill="#12303f"/>
+  <ellipse cx="48" cy="70" rx="6" ry="3.2" fill="#12303f"/>
+  <!-- 手：左手擺動、右手舉高 -->
+  <path d="M10 42q-7-2-8 6" stroke="#12303f" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <path d="M54 34q7-5 5-13" stroke="#12303f" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <!-- 身體 -->
+  <circle cx="32" cy="38" r="23" fill="url(#g)" stroke="#12303f" stroke-width="3"/>
+  <!-- 臉 -->
+  <ellipse cx="25" cy="35" rx="3.4" ry="4.4" fill="#12303f"/>
+  <ellipse cx="39" cy="35" rx="3.4" ry="4.4" fill="#12303f"/>
+  <circle cx="26.2" cy="33.4" r="1.2" fill="#fff"/>
+  <circle cx="40.2" cy="33.4" r="1.2" fill="#fff"/>
+  <circle cx="19" cy="43" r="3" fill="#f4a3a3" opacity=".7"/>
+  <circle cx="45" cy="43" r="3" fill="#f4a3a3" opacity=".7"/>
+  <path d="M27 44q5 5 10 0" stroke="#12303f" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+  <!-- 學士帽 -->
+  <path d="M12 15L32 7l20 8-20 8z" fill="#12303f"/>
+  <path d="M21 19v5q11 6 22 0v-5" fill="#12303f"/>
+  <path d="M50 15v9" stroke="#e9f392" stroke-width="2"/>
+  <circle cx="50" cy="25" r="2.4" fill="#e9f392"/>
+</svg>

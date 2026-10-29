@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>課堂工具箱</title>
+  <meta name="description" content="不用登入的課堂工具：抽籤、座位、小遊戲、隨機分組。名冊只存在你的瀏覽器。">
+  <link rel="icon" href="/img/icon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="/img/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="/img/icon-180.png">
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/ui.css">
+  <script src="/vendor/xlsx/xlsx.mini.min.js" defer></script>
+  <script type="module" src="/js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><img class="ct-logo" src="/img/classtool-logo.png" alt=""><span data-i18n="ct.brand">課堂工具箱</span></a>
+    <div class="top-actions">
+      <select id="course-sel" class="mini-select" aria-label="class"></select>
+      <button class="btn btn-small tm-pill" type="button" id="tm-pill" hidden><i class="fa-solid fa-stopwatch" aria-hidden="true"></i> <span></span></button>
+      <div id="chrome"></div>
+      <input type="range" id="vol" min="0" max="1" step="0.05" data-i18n-aria="t.volume">
+    </div>
+  </header>
+
+  <main id="dash-view">
+    <nav class="tabs" role="tablist">
+      <button class="btn tab" role="tab" data-tab="roster" aria-selected="true" data-i18n="ct.tab.roster" data-icon="fa-users"></button>
+      <button class="btn tab" role="tab" data-tab="lottery" aria-selected="false" data-i18n="t.tab.lottery" data-icon="fa-shuffle"></button>
+      <button class="btn tab" role="tab" data-tab="seats" aria-selected="false" data-i18n="t.tab.seats" data-icon="fa-chair"></button>
+      <button class="btn tab" role="tab" data-tab="fun" aria-selected="false" data-i18n="t.tab.fun" data-icon="fa-dice"></button>
+      <button class="btn tab" role="tab" data-tab="groups" aria-selected="false" data-i18n="fun.groups" data-icon="fa-people-group"></button>
+      <button class="btn tab" role="tab" data-tab="board" aria-selected="false" data-i18n="wb.tab" data-icon="fa-chalkboard"></button>
+      <button class="btn tab" role="tab" data-tab="circuit" aria-selected="false" data-i18n="cs.tab" data-icon="fa-microchip"></button>
+      <button class="btn tab" role="tab" data-tab="timer" aria-selected="false" data-i18n="tm.tab" data-icon="fa-stopwatch"></button>
+      <button class="btn tab" role="tab" data-tab="help" aria-selected="false" data-i18n="ct.tab.help" data-icon="fa-circle-question"></button>
+    </nav>
+
+    <section class="panel" data-panel="roster">
+      <div class="grid split">
+        <div class="card">
+          <h2 class="plain" data-i18n="ct.roster" data-icon="fa-users"></h2>
+          <p class="small muted" data-i18n="ct.rosterHint"></p>
+          <div class="toolbar">
+            <a class="btn btn-small" href="/roster-template.xlsx" download="課堂工具箱_名冊範本.xlsx" data-i18n="ct.template" data-icon="fa-file-arrow-down"></a>
+            <label class="btn btn-small btn-primary" for="ct-file"><i class="fa-solid fa-file-import" aria-hidden="true"></i> <span data-i18n="ct.import"></span></label>
+            <input type="file" id="ct-file" accept=".xlsx,.xls,.csv,.ods" hidden>
+            <button class="btn btn-small" id="ct-paste-btn" type="button" data-i18n="ct.paste" data-icon="fa-paste"></button>
+            <button class="btn btn-small" id="ct-export" type="button" data-i18n="ct.export" data-icon="fa-file-excel"></button>
+          </div>
+          <form class="ct-link" id="ct-link">
+            <input type="url" name="url" id="ct-link-url" inputmode="url" autocomplete="off" data-i18n-ph="ct.linkPh" aria-label="link" required>
+            <button class="btn btn-small btn-primary" type="submit" data-i18n="ct.linkBtn" data-icon="fa-cloud-arrow-down"></button>
+          </form>
+          <p class="small muted" data-i18n="ct.linkHint"></p>
+          <form class="ct-quick" id="ct-quick">
+            <span data-i18n="ct.quickLabel"></span>
+            <input type="number" name="n" min="1" max="200" inputmode="numeric" data-i18n-ph="ct.quickPh" aria-label="headcount" required>
+            <button class="btn btn-small" type="submit" data-i18n="ct.quickBtn" data-icon="fa-list-ol"></button>
+          </form>
+          <p class="small" id="ct-count"></p>
+          <div class="table-wrap">
+            <table class="tbl ct-tbl">
+              <thead><tr><th data-i18n="g.seat">座號</th><th data-i18n="g.id">學號</th><th data-i18n="g.name">姓名</th><th data-i18n="ct.score">加減分</th><th></th></tr></thead>
+              <tbody id="ct-tbody"></tbody>
+            </table>
+          </div>
+          <form class="ct-add" id="ct-add">
+            <input type="text" name="seat" maxlength="6" data-i18n-ph="g.seat" aria-label="seat">
+            <input type="text" name="id" maxlength="30" data-i18n-ph="g.id" aria-label="id">
+            <input type="text" name="name" maxlength="40" data-i18n-ph="g.name" aria-label="name" required>
+            <button class="btn btn-small" type="submit" data-i18n="ct.addRow" data-icon="fa-plus"></button>
+          </form>
+          <div class="toolbar mt">
+            <button class="btn btn-small" id="ct-reset-score" type="button" data-i18n="ct.resetScore" data-icon="fa-rotate-left"></button>
+            <button class="btn btn-small" id="ct-clear" type="button" data-i18n="ct.clearRoster" data-icon="fa-trash"></button>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <h2 class="plain" data-i18n="ct.classes" data-icon="fa-school"></h2>
+            <ul class="ct-classes" id="ct-classes"></ul>
+            <form class="ct-add" id="ct-new-class">
+              <input type="text" name="name" maxlength="60" data-i18n-ph="ct.classPh" aria-label="class name" required>
+              <button class="btn btn-small btn-primary" type="submit" data-i18n="ct.newClass" data-icon="fa-plus"></button>
+            </form>
+          </div>
+          <div class="card">
+            <h2 class="plain" data-i18n="ct.backup" data-icon="fa-box-archive"></h2>
+            <p class="small muted" data-i18n="ct.backupHint"></p>
+            <div class="toolbar">
+              <button class="btn btn-small" id="ct-backup" type="button" data-i18n="ct.backupDl" data-icon="fa-download"></button>
+              <label class="btn btn-small" for="ct-restore"><i class="fa-solid fa-upload" aria-hidden="true"></i> <span data-i18n="ct.restore"></span></label>
+              <input type="file" id="ct-restore" accept=".json,application/json" hidden>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="lottery" hidden>
+      <div class="grid split">
+        <div class="card stage">
+          <div class="mode-bar">
+            <label><span data-i18n="lot.content">抽取內容</span>
+              <select id="lot-content">
+                <option value="both" data-i18n="lot.c.both">全部顯示</option>
+                <option value="name" data-i18n="lot.c.nameOnly">只要姓名</option>
+                <option value="id" data-i18n="lot.c.idOnly">只要學號</option>
+                <option value="number" data-i18n="lot.c.number">數字範圍</option>
+              </select></label>
+            <label id="omi-bad-field" class="hidden"><input type="checkbox" id="omi-bad" autocomplete="off"> <span data-i18n="lot.omiBad">包含下籤</span></label>
+            <label id="scratch-self-field" class="hidden"><input type="checkbox" id="scratch-self"> <span data-i18n="lot.scratchSelf">自己刮</span></label>
+            <label id="lot-count-field"><span data-i18n="lot.count">人數</span><input type="number" id="lot-count" min="1" max="5" value="1" style="width:70px"></label>
+            <label id="num-range" class="hidden"><input type="number" id="num-min" value="1"> ～ <input type="number" id="num-max" value="10"></label>
+            <label><span data-i18n="lot.style">樣式</span>
+              <select id="lot-style">
+                <option value="block" data-i18n="lot.s.block">驚喜方塊</option>
+                <option value="slot" data-i18n="lot.s.slot">拉霸大獎等你拿</option>
+                <option value="wheel" data-i18n="lot.s.wheel">命運轉轉轉</option>
+                <option value="pinball" data-i18n="lot.s.pinball">彈珠台大冒險</option>
+                <option value="gacha" data-i18n="lot.s.gacha">扭蛋轉轉樂</option>
+                <option value="claw" data-i18n="lot.s.claw">夾娃娃大挑戰</option>
+                <option value="cards" data-i18n="lot.s.cards">翻牌見真章</option>
+                <option value="scratch" data-i18n="lot.s.scratch">刮刮樂大揭曉</option>
+                <option value="kuji" data-i18n="lot.s.kuji">一番賞開箱</option>
+                <option value="pack" data-i18n="lot.s.pack">拆卡包抽抽樂</option>
+                <option value="darts" data-i18n="lot.s.darts">一鏢定江山</option>
+                <option value="bingo" data-i18n="lot.s.bingo">賓果連線王</option>
+                <option value="raffle" data-i18n="lot.s.raffle">幸運摸彩箱</option>
+                <option value="omikuji" data-i18n="lot.s.omikuji">求籤問天機</option>
+                <option value="buzzer" data-i18n="lot.s.buzzer">搶答快手王</option>
+              </select></label>
+          </div>
+
+          <div id="style-block">
+            <div class="block-row" id="block-row"></div>
+          </div>
+          <div id="style-slot" class="hidden">
+            <div class="slot" id="slot">
+              <div class="slot-window">
+                <div class="reel" id="reel-l"><div class="reel-item"></div></div>
+                <div class="reel" id="reel-m"><div class="reel-item"><span id="slot-main">?</span><small id="slot-sub"></small></div></div>
+                <div class="reel" id="reel-r"><div class="reel-item"></div></div>
+              </div>
+            </div>
+            <div class="wheel-result" id="slot-result"></div>
+          </div>
+          <div id="style-wheel" class="hidden">
+            <div class="wheel-wrap"><div class="wheel-pointer"></div><canvas id="wheel" width="840" height="840"></canvas></div>
+            <div class="wheel-result" id="wheel-result"></div>
+          </div>
+          <div id="style-pinball" class="hidden">
+            <div class="pinball-wrap"><canvas id="pinball"></canvas></div>
+            <div class="wheel-result" id="pin-result"></div>
+            <p class="small muted" data-i18n="lot.pinHint"></p>
+          </div>
+          <div id="style-gacha" class="hidden"><div id="gacha-stage"></div></div>
+          <div id="style-claw" class="hidden"><div id="claw-stage"></div></div>
+          <div id="style-cards" class="hidden"><div id="cards-stage"></div></div>
+          <div id="style-scratch" class="hidden"><div id="scratch-stage"></div></div>
+          <div id="style-kuji" class="hidden"><div id="kuji-stage"></div></div>
+          <div id="style-darts" class="hidden"><div id="darts-stage"></div></div>
+          <div id="style-bingo" class="hidden"><div id="bingo-stage"></div></div>
+          <div id="style-raffle" class="hidden"><div id="raffle-stage"></div></div>
+          <div id="style-omikuji" class="hidden"><div id="omikuji-stage"></div></div>
+          <div id="style-buzzer" class="hidden"><div id="buzzer-stage"></div></div>
+          <div id="style-pack" class="hidden"><div id="pack-stage"></div></div>
+          <div class="pop hidden" id="pop"></div>
+
+          <div class="track" id="track"><div class="runner" id="runner"></div></div>
+
+          <div class="draw-actions">
+            <button class="btn btn-primary btn-big" id="draw-btn" type="button" data-i18n="lot.start" data-icon="fa-play"></button>
+          </div>
+          <div class="after-draw" id="after-draw">
+            <ul class="pick-list" id="lot-picks"></ul>
+            <div class="toolbar" id="lot-all-btns">
+              <button class="btn btn-green" id="plus-btn" type="button" data-i18n="lot.plusAll" data-icon="fa-thumbs-up"></button>
+              <button class="btn btn-purple" id="minus-btn" type="button" data-i18n="lot.minusAll" data-icon="fa-thumbs-down"></button>
+            </div>
+          </div>
+          <div class="draw-options">
+            <label><input type="checkbox" id="no-repeat" checked> <span data-i18n="lot.noRepeat">抽過的不再抽</span></label>
+            <label title=""><input type="checkbox" id="lot-egg" autocomplete="off"> <span data-i18n="lot.egg">加入老師彩蛋</span></label>
+            <label><input type="checkbox" id="lot-auto" checked autocomplete="off"> <span data-i18n="lot.autoStop">自動停止（1～5 秒）</span></label>
+            <span id="pool-info" class="muted"></span>
+            <button class="btn btn-small" id="reset-pool" type="button" data-i18n="lot.reset">重置抽籤名單</button>
+          </div>
+          <p class="small muted" data-i18n="lot.keys"></p>
+        </div>
+
+        <div>
+          <div class="card">
+            <h2 class="plain"><span data-i18n="abs.title">今日缺席</span> <small id="abs-date"></small></h2>
+            <p class="small muted" data-i18n="abs.hint"></p>
+            <div class="absent-grid" id="absent-grid"></div>
+            <div class="toolbar mt">
+              <button class="btn btn-small" id="abs-save" type="button" data-i18n="abs.save" data-icon="fa-floppy-disk"></button>
+            </div>
+            <p class="small" id="abs-status"></p>
+          </div>
+          <div class="card">
+            <h2 class="plain" data-i18n="lot.history">本節課紀錄</h2>
+            <ul class="history" id="session-history"></ul>
+            <div class="toolbar mt">
+              <button class="btn btn-small" id="hist-save" type="button" data-i18n="lot.histSave" data-icon="fa-floppy-disk"></button>
+              <button class="btn btn-small" id="hist-reset" type="button" data-i18n="lot.histReset" data-icon="fa-rotate-left"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 座位抽籤 -->
+    <section class="panel" data-panel="seats" hidden>
+      <div class="subtabs seat-views">
+        <button class="btn" type="button" data-seatview="draw" aria-pressed="true" data-i18n="seat.view.draw" data-icon="fa-dice"></button>
+        <button class="btn" type="button" data-seatview="chart" aria-pressed="false" data-i18n="seat.view.chart" data-icon="fa-table-cells"></button>
+        <span class="small muted seat-views-note" data-i18n="seat.view.note"></span>
+      </div>
+      <div id="seat-draw-sec">
+      <div class="card stage">
+        <div class="subtabs">
+          <button class="btn btn-small" data-seatmode="pattern" aria-pressed="true" data-i18n="seat.mode.pattern" data-icon="fa-shapes"></button>
+          <button class="btn btn-small" data-seatmode="coord" aria-pressed="false" data-i18n="seat.mode.coord" data-icon="fa-location-crosshairs"></button>
+        </div>
+        <div class="mode-bar">
+          <label><input type="checkbox" id="seat-auto" checked autocomplete="off"> <span data-i18n="lot.autoStop">自動停止（1～5 秒）</span></label>
+          <label><input type="checkbox" id="seat-egg" autocomplete="off"> <span data-i18n="seat.egg">老師一起抽（講台）</span></label>
+        </div>
+        <div class="mode-bar seat-size">
+          <label><span data-i18n="set.rows">排數（前後）</span><input type="number" id="seat-rows" min="1" max="15"></label>
+          <label><span data-i18n="set.cols">每排座位數（左右）</span><input type="number" id="seat-cols" min="1" max="15"></label>
+          <button class="btn btn-small" id="seat-size-apply" type="button" data-i18n="chart.apply" data-icon="fa-border-all"></button>
+        </div>
+        <div id="seat-pattern-bar" class="mode-bar">
+          <label><span data-i18n="lot.standRule">抓誰</span>
+            <select id="seat-catch">
+              <option value="random" data-i18n="lot.stand.random">隨機</option>
+              <option value="first" data-i18n="lot.stand.firstOpt">抓第一個站起來的</option>
+              <option value="last" data-i18n="lot.stand.lastOpt" selected>抓最後一個站起來的</option>
+            </select></label>
+          <button class="btn btn-primary btn-big" id="pattern-btn" type="button" data-i18n="lot.start" data-icon="fa-play"></button>
+        </div>
+        <div id="seat-coord-bar" class="mode-bar hidden">
+          <button class="btn btn-small" id="origin-pick" type="button" data-i18n="seat.pickOrigin" data-icon="fa-crosshairs"></button>
+          <button class="btn btn-small" id="origin-rand" type="button" data-i18n="seat.randOrigin" data-icon="fa-shuffle"></button>
+          <label><span data-i18n="seat.quadrant">象限</span>
+            <select id="quadrant">
+              <option value="0" data-i18n="seat.q.rand">隨機</option>
+              <option value="1" data-i18n="seat.q.1">第一象限（右前）</option>
+              <option value="2" data-i18n="seat.q.2">第二象限（左前）</option>
+              <option value="3" data-i18n="seat.q.3">第三象限（左後）</option>
+              <option value="4" data-i18n="seat.q.4">第四象限（右後）</option>
+            </select></label>
+          <label><span data-i18n="seat.coordPattern">圖案</span>
+            <select id="coord-pattern">
+              <option value="single" data-i18n="seat.cp.single">單一座位</option>
+              <option value="bigCross" data-i18n="pat.bigCross">大十字 ✚</option>
+              <option value="smallCross" data-i18n="pat.smallCross">小十字 +</option>
+              <option value="bigX" data-i18n="pat.bigX">大叉叉 ✖</option>
+              <option value="smallX" data-i18n="pat.smallX">小叉叉 ×</option>
+              <option value="rand" data-i18n="seat.cp.rand">隨機圖案</option>
+            </select></label>
+          <button class="btn btn-primary" id="coord-btn" type="button" data-i18n="lot.start" data-icon="fa-play"></button>
+        </div>
+        <p class="small muted" id="seat-hint"></p>
+        <div class="pattern-name" id="pattern-name"></div>
+        <div class="coord-result" id="coord-result"></div>
+        <div class="room-wrap">
+          <div class="board" data-i18n="seat.board">講台 / 黑板</div>
+          <div class="room" id="room"></div>
+        </div>
+        <div class="after-draw" id="seat-after">
+          <span class="cur" id="seat-picked"></span>
+          <ul class="pick-list" id="seat-picks"></ul>
+          <div class="toolbar">
+            <button class="btn btn-green" id="seat-plus" type="button" data-i18n="lot.plusAll" data-icon="fa-thumbs-up"></button>
+            <button class="btn btn-purple" id="seat-minus" type="button" data-i18n="lot.minusAll" data-icon="fa-thumbs-down"></button>
+          </div>
+        </div>
+      </div>
+      </div>
+      <div id="seat-chart-sec" hidden>
+      <div class="card">
+        <h2 data-i18n="chart.title" data-icon="fa-table-cells">座位表</h2>
+        <p class="small muted" data-i18n="chart.desc"></p>
+        <div class="chart-bar">
+          <label class="field"><span data-i18n="set.rows">排數（前後）</span><input type="number" id="chart-rows" min="1" max="15"></label>
+          <label class="field"><span data-i18n="set.cols">每排座位數（左右）</span><input type="number" id="chart-cols" min="1" max="15"></label>
+          <button class="btn btn-small" id="chart-apply" type="button" data-i18n="chart.apply" data-icon="fa-border-all"></button>
+        </div>
+        <div class="chart-bar">
+          <button class="btn btn-small" id="chart-byseat" type="button" data-i18n="chart.bySeat" data-icon="fa-arrow-down-1-9"></button>
+          <button class="btn btn-small" id="chart-random" type="button" data-i18n="chart.random" data-icon="fa-shuffle"></button>
+          <label class="check small"><input type="checkbox" id="chart-skip-absent"> <span data-i18n="chart.skipAbsent">隨機時今日缺席者不排入</span></label>
+          <button class="btn btn-small" id="chart-clear" type="button" data-i18n="chart.clear" data-icon="fa-eraser"></button>
+          <button class="btn btn-small" id="chart-revert" type="button" data-i18n="chart.revert" data-icon="fa-rotate-left"></button>
+          <button class="btn btn-small" id="chart-print" type="button" data-i18n="chart.print" data-icon="fa-print"></button>
+          <label class="btn btn-small" for="chart-file"><i class="fa-solid fa-file-import" aria-hidden="true"></i> <span data-i18n="ct.seatImport"></span></label>
+          <input type="file" id="chart-file" accept=".xlsx,.xls,.csv,.ods" hidden>
+          <button class="btn btn-primary" id="chart-save" type="button" data-i18n="chart.save" data-icon="fa-floppy-disk"></button>
+          <span class="small" id="chart-status"></span>
+        </div>
+        <div class="chart-place">
+          <span class="small" id="chart-sel-label"></span>
+          <div class="chart-search">
+            <input type="search" id="chart-q" autocomplete="off" data-i18n-ph="chart.searchPh" placeholder="輸入座號、學號或姓名，按 Enter 放入">
+            <div class="chart-suggest" id="chart-suggest" role="listbox"></div>
+          </div>
+        </div>
+        <p class="small muted" data-i18n="chart.hint"></p>
+        <div class="room-wrap" id="chart-print-area">
+          <div class="board" data-i18n="seat.board">講台 / 黑板</div>
+          <div class="room chart-room" id="chart-room"></div>
+        </div>
+        <h3><span data-i18n="chart.pool">尚未安排座位</span> <span class="count-badge" id="chart-pool-n">0</span></h3>
+        <div class="chart-pool" id="chart-pool"></div>
+      </div>
+      </div>
+    </section>
+
+
+    <!-- 骰子 / 硬幣 / 分組 -->
+    <section class="panel" data-panel="fun" hidden>
+      <div class="grid grid-2">
+        <div class="card center">
+          <h2 class="plain" style="justify-content:center" data-i18n="fun.dice" data-icon="fa-dice"></h2>
+          <label class="small"><span data-i18n="fun.diceCount">骰子數量</span>
+            <select id="dice-count" style="width:auto;margin-left:6px"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
+          <div class="dice-row" id="dice-row"></div>
+          <div class="dice-sum" id="dice-sum"></div>
+          <button class="btn btn-primary btn-big mt" id="dice-btn" type="button" data-i18n="fun.roll">擲！</button>
+        </div>
+        <div class="card center">
+          <h2 class="plain" style="justify-content:center" data-i18n="fun.coin" data-icon="fa-coins"></h2>
+          <label class="small"><span data-i18n="fun.coinCount">硬幣數量</span>
+            <select id="coin-count" style="width:auto;margin-left:6px"><option selected>1</option><option>2</option><option>3</option><option>4</option></select></label>
+          <div class="coin-row" id="coin-row"></div>
+          <div class="dice-sum" id="coin-result"></div>
+          <button class="btn btn-yellow btn-big mt" id="coin-btn" type="button" data-i18n="fun.flip">翻！</button>
+        </div>
+        <div class="card center">
+          <h2 class="plain" style="justify-content:center" data-i18n="fun.jiao" data-icon="fa-moon"></h2>
+          <div class="jiao-row" id="jiao-row"></div>
+          <div class="dice-sum" id="jiao-result"></div>
+          <div class="small muted" id="jiao-mean"></div>
+          <button class="btn btn-primary btn-big mt" id="jiao-btn" type="button" data-i18n="fun.jiaoBtn">擲筊！</button>
+        </div>
+        <div class="card center">
+          <h2 class="plain" style="justify-content:center" data-i18n="fun.rps" data-icon="fa-hand-scissors"></h2>
+          <div class="subtabs rps-mode">
+            <button class="btn btn-small" type="button" data-rps-mode="rps" aria-pressed="true" data-i18n="fun.rpsMode.rps">猜拳</button>
+            <button class="btn btn-small" type="button" data-rps-mode="num" aria-pressed="false" data-i18n="fun.rpsMode.num">比大小（2・0・5）</button>
+          </div>
+          <div class="rps-row" id="rps-row">
+            <div class="rps-side"><div class="rps-who" data-i18n="fun.rpsYou">我們</div><div class="rps-hand me"><div class="rps-card"><div class="rf front">✊</div><div class="rf back"></div></div></div></div>
+            <div class="rps-vs">VS</div>
+            <div class="rps-side"><div class="rps-who" data-i18n="fun.rpsCpu">電腦</div><div class="rps-hand cpu"><div class="rps-card"><div class="rf front">✊</div><div class="rf back"></div></div></div></div>
+          </div>
+          <div class="dice-sum" id="rps-result"></div>
+          <div class="small muted" id="rps-score"></div>
+          <div class="rps-btns">
+            <button class="btn btn-big" type="button" data-rps="0">✌️ <span class="rps-lbl" data-i18n="fun.rps.0">剪刀</span></button>
+            <button class="btn btn-big" type="button" data-rps="1">✊ <span class="rps-lbl" data-i18n="fun.rps.1">石頭</span></button>
+            <button class="btn btn-big" type="button" data-rps="2">✋ <span class="rps-lbl" data-i18n="fun.rps.2">布</span></button>
+          </div>
+          <button class="btn btn-small mt" id="rps-reset" type="button" data-i18n="fun.rpsReset" data-icon="fa-rotate-left"></button>
+        </div>
+      </div>
+      <label class="check spot-opt"><input type="checkbox" id="fun-spot" checked autocomplete="off"> <span data-i18n="fun.spotlight">聚光燈特效（畫面變暗，在中間擲）</span></label>
+    </section>
+    <section class="panel" data-panel="groups" hidden>
+      <div class="card">
+        <h2 class="plain" data-i18n="fun.groups" data-icon="fa-people-group"></h2>
+        <div class="toolbar">
+          <label class="small"><span data-i18n="fun.groupCount">組數</span> <input type="number" id="group-n" min="1" max="50" value="4" style="width:80px;margin:0 0 0 6px"></label>
+          <label class="small"><span data-i18n="fun.groupSize">每組人數</span> <input type="number" id="group-size" min="1" max="100" placeholder="—" style="width:80px;margin:0 0 0 6px"></label>
+          <button class="btn btn-primary" id="group-btn" type="button" data-i18n="fun.makeGroups">分組！</button>
+          <button class="btn btn-small hidden" id="group-leaders" type="button" data-i18n="fun.reLeaders" data-icon="fa-crown"></button>
+          <button class="btn btn-small btn-green hidden" id="group-dl" type="button" data-i18n="fun.groupDl" data-icon="fa-download"></button>
+          <span class="small muted" data-i18n="fun.groupNote"></span>
+        </div>
+        <div class="overview" id="groups"></div>
+      </div>
+    </section>
+
+    <!-- 白板 -->
+    <section class="panel" data-panel="board" hidden>
+      <div class="wb">
+        <div class="wb-bar" role="toolbar" aria-label="whiteboard">
+          <div class="wb-group">
+            <button class="btn btn-small icon-btn" type="button" data-wbtool="select" data-i18n-title="wb.t.select" data-i18n-aria="wb.t.select"><i class="fa-solid fa-arrow-pointer" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-wbtool="pen" data-i18n-title="wb.t.pen" data-i18n-aria="wb.t.pen"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-wbtool="pencil" data-i18n-title="wb.t.pencil" data-i18n-aria="wb.t.pencil"><i class="fa-solid fa-pencil" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-wbtool="brush" data-i18n-title="wb.t.brush" data-i18n-aria="wb.t.brush"><i class="fa-solid fa-paintbrush" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-wbtool="water" data-i18n-title="wb.t.water" data-i18n-aria="wb.t.water"><i class="fa-solid fa-droplet" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-wbtool="hl" data-i18n-title="wb.t.hl" data-i18n-aria="wb.t.hl"><i class="fa-solid fa-highlighter" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-wbtool="laser" data-i18n-title="wb.t.laser" data-i18n-aria="wb.t.laser"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-wbtool="eraser" data-i18n-title="wb.t.eraser" data-i18n-aria="wb.t.eraser"><i class="fa-solid fa-eraser" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-wbtool="line" data-i18n-title="wb.t.line" data-i18n-aria="wb.t.line"><i class="fa-solid fa-minus" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-wbtool="arrow" data-i18n-title="wb.t.arrow" data-i18n-aria="wb.t.arrow"><i class="fa-solid fa-arrow-right-long" aria-hidden="true"></i></button>
+            <span class="wb-shape-wrap">
+              <button class="btn btn-small icon-btn" type="button" id="wb-shape-btn" data-i18n-title="wb.t.shape" data-i18n-aria="wb.t.shape"><i class="fa-regular fa-square"></i></button>
+              <div class="wb-shapes" id="wb-shapes" hidden><button type="button" class="wb-shape" data-shape="rect" data-i18n-title="wb.sh.rect" data-i18n-aria="wb.sh.rect"><i class="fa-regular fa-square"></i></button><button type="button" class="wb-shape" data-shape="ellipse" data-i18n-title="wb.sh.ellipse" data-i18n-aria="wb.sh.ellipse"><i class="fa-regular fa-circle"></i></button><button type="button" class="wb-shape" data-shape="tri" data-i18n-title="wb.sh.tri" data-i18n-aria="wb.sh.tri"><svg viewBox="0 0 24 24"><path d="M12 3L22 21H2z"/></svg></button><button type="button" class="wb-shape" data-shape="rtri" data-i18n-title="wb.sh.rtri" data-i18n-aria="wb.sh.rtri"><svg viewBox="0 0 24 24"><path d="M3 3V21H21z"/></svg></button><button type="button" class="wb-shape" data-shape="diamond" data-i18n-title="wb.sh.diamond" data-i18n-aria="wb.sh.diamond"><svg viewBox="0 0 24 24"><path d="M12 2L22 12 12 22 2 12z"/></svg></button><button type="button" class="wb-shape" data-shape="pent" data-i18n-title="wb.sh.pent" data-i18n-aria="wb.sh.pent"><svg viewBox="0 0 24 24"><path d="M12 2l10 7.3-3.8 11.7H5.8L2 9.3z"/></svg></button><button type="button" class="wb-shape" data-shape="hex" data-i18n-title="wb.sh.hex" data-i18n-aria="wb.sh.hex"><svg viewBox="0 0 24 24"><path d="M7 3h10l5 9-5 9H7l-5-9z"/></svg></button><button type="button" class="wb-shape" data-shape="star" data-i18n-title="wb.sh.star" data-i18n-aria="wb.sh.star"><svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 21l1.6-7L2 9.2l7.1-.6z"/></svg></button><button type="button" class="wb-shape" data-shape="heart" data-i18n-title="wb.sh.heart" data-i18n-aria="wb.sh.heart"><svg viewBox="0 0 24 24"><path d="M12 21C5 15.5 2 12 2 8.2 2 5.3 4.3 3 7.1 3c1.9 0 3.6 1 4.9 2.7C13.3 4 15 3 16.9 3 19.7 3 22 5.3 22 8.2 22 12 19 15.5 12 21z"/></svg></button><button type="button" class="wb-shape" data-shape="para" data-i18n-title="wb.sh.para" data-i18n-aria="wb.sh.para"><svg viewBox="0 0 24 24"><path d="M7 5h15l-5 14H2z"/></svg></button><button type="button" class="wb-shape" data-shape="trap" data-i18n-title="wb.sh.trap" data-i18n-aria="wb.sh.trap"><svg viewBox="0 0 24 24"><path d="M7 5h10l5 14H2z"/></svg></button></div>
+            </span>
+            <button class="btn btn-small icon-btn" type="button" id="wb-fill" data-i18n-title="wb.fill" data-i18n-aria="wb.fill"><i class="fa-solid fa-fill-drip" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-wbtool="text" data-i18n-title="wb.t.text" data-i18n-aria="wb.t.text"><i class="fa-solid fa-font" aria-hidden="true"></i></button>
+          </div>
+          <div class="wb-group">
+            <div class="wb-colors" id="wb-colors"></div>
+            <label class="wb-picker" data-i18n-title="wb.pick"><input type="color" id="wb-color-in" value="#12232e" data-i18n-aria="wb.pick"><i class="fa-solid fa-palette" aria-hidden="true"></i></label>
+            <button class="btn btn-small icon-btn" type="button" id="wb-pin" data-i18n-title="wb.pin" data-i18n-aria="wb.pin"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i></button>
+          </div>
+          <div class="wb-group wb-width">
+            <span class="wb-width-dot-box"><i id="wb-width-dot"></i></span>
+            <input type="range" id="wb-width" min="1" max="40" value="6" data-i18n-aria="wb.width" data-i18n-title="wb.width">
+            <b id="wb-width-n">6</b>
+          </div>
+          <div class="wb-group wb-textopts">
+            <i class="fa-solid fa-font wb-opt-ic" aria-hidden="true"></i>
+            <input type="number" id="wb-fsize" min="12" max="200" value="42" data-i18n-aria="wb.fsize" data-i18n-title="wb.fsize">
+            <select id="wb-font" class="mini-select" data-i18n-aria="wb.font">
+              <option value="sans" data-i18n="wb.f.sans">黑體</option>
+              <option value="serif" data-i18n="wb.f.serif">明體</option>
+              <option value="kai" data-i18n="wb.f.kai">楷書</option>
+              <option value="round" data-i18n="wb.f.round">圓體</option>
+              <option value="hand" data-i18n="wb.f.hand">手寫</option>
+              <option value="mono" data-i18n="wb.f.mono">等寬</option>
+            </select>
+          </div>
+          <div class="wb-group">
+            <button class="btn btn-small" type="button" id="wb-auto-ans" data-i18n="wb.autoAns" data-icon="fa-equals" data-i18n-title="wb.autoAnsTip"></button>
+            <button class="btn btn-small" type="button" id="wb-auto-graph" data-i18n="wb.autoGraph" data-icon="fa-chart-line" data-i18n-title="wb.autoGraphTip"></button>
+          </div>
+          <div class="wb-group">
+            <button class="btn btn-small" type="button" id="wb-formula-btn" data-i18n="wb.formula" data-icon="fa-square-root-variable"></button>
+            <label class="btn btn-small" for="wb-img"><i class="fa-solid fa-image" aria-hidden="true"></i> <span data-i18n="wb.image"></span></label>
+            <input type="file" id="wb-img" accept="image/*" hidden>
+          </div>
+          <div class="wb-group">
+            <button class="btn btn-small icon-btn" type="button" id="wb-undo" data-i18n-title="wb.undo" data-i18n-aria="wb.undo"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" id="wb-redo" data-i18n-title="wb.redo" data-i18n-aria="wb.redo"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" id="wb-rot" data-i18n-title="wb.rot" data-i18n-aria="wb.rot"><i class="fa-solid fa-rotate" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" id="wb-del" data-i18n-title="wb.del" data-i18n-aria="wb.del"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" id="wb-clear" data-i18n-title="wb.clear" data-i18n-aria="wb.clear"><i class="fa-solid fa-broom" aria-hidden="true"></i></button>
+            <button class="btn btn-small" type="button" id="wb-clearall" data-i18n="wb.clearAll" data-icon="fa-trash"></button>
+          </div>
+          <div class="wb-group">
+            <select id="wb-bgc" class="mini-select" data-i18n-aria="wb.bg">
+              <option value="white" data-i18n="wb.bg.white">白板</option>
+              <option value="black" data-i18n="wb.bg.black">黑板</option>
+              <option value="green" data-i18n="wb.bg.green">綠板</option>
+              <option value="custom" data-i18n="wb.bg.custom">自訂顏色</option>
+            </select>
+            <input type="color" id="wb-bgcolor" class="wb-bgcolor" value="#ffffff" data-i18n-aria="wb.bg.custom" data-i18n-title="wb.bg.custom">
+            <select id="wb-pat" class="mini-select" data-i18n-aria="wb.pat">
+              <option value="none" data-i18n="wb.pat.none">空白</option>
+              <option value="tw" data-i18n="wb.pat.tw">台灣限定（日期與值日生）</option>
+              <option value="lines" data-i18n="wb.pat.lines">橫線</option>
+              <option value="vlines" data-i18n="wb.pat.vlines">直線</option>
+              <option value="grid" data-i18n="wb.pat.grid">方格</option>
+              <option value="staff" data-i18n="wb.pat.staff">五線譜</option>
+              <option value="nine" data-i18n="wb.pat.nine">九宮格（含注音格）</option>
+              <option value="four" data-i18n="wb.pat.four">四宮格（田字格）</option>
+              <option value="box" data-i18n="wb.pat.box">方框</option>
+            </select>
+            <input type="text" id="wb-duty" class="wb-duty" maxlength="12" hidden data-i18n-ph="wb.duty" data-i18n-aria="wb.duty">
+            <label class="btn btn-small" for="wb-bgimg" data-i18n-title="wb.bgImgTip"><i class="fa-solid fa-panorama" aria-hidden="true"></i> <span data-i18n="wb.bgImg"></span></label>
+            <input type="file" id="wb-bgimg" accept="image/*" hidden>
+            <button class="btn btn-small icon-btn" type="button" id="wb-bgimg-del" hidden data-i18n-title="wb.bgImgDel" data-i18n-aria="wb.bgImgDel"><i class="fa-solid fa-image-portrait" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" id="wb-prev" data-i18n-title="wb.prev" data-i18n-aria="wb.prev"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>
+            <span class="wb-page" id="wb-page">1 / 1</span>
+            <button class="btn btn-small icon-btn" type="button" id="wb-next" data-i18n-title="wb.next" data-i18n-aria="wb.next"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" id="wb-delpage" data-i18n-title="wb.delPage" data-i18n-aria="wb.delPage"><i class="fa-solid fa-file-circle-minus" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" id="wb-png" data-i18n-title="wb.png" data-i18n-aria="wb.png"><i class="fa-solid fa-download" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" id="wb-full" data-i18n-title="wb.full" data-i18n-aria="wb.full"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <div class="wb-main">
+          <div class="wb-stage" id="wb-stage">
+            <canvas id="wb-canvas"></canvas>
+            <textarea id="wb-text" class="wb-text hidden" rows="1" aria-label="text"></textarea>
+          </div>
+          <aside class="wb-side card">
+            <div class="subtabs">
+              <button class="btn btn-small" type="button" data-wbside="calc" aria-pressed="true" data-i18n="wb.calc" data-icon="fa-calculator"></button>
+              <button class="btn btn-small" type="button" data-wbside="graph" aria-pressed="false" data-i18n="wb.graph" data-icon="fa-chart-line"></button>
+              <button class="btn btn-small" type="button" data-wbside="quiz" aria-pressed="false" data-i18n="wb.quiz" data-icon="fa-shuffle"></button>
+              <button class="btn btn-small" type="button" data-wbside="music" aria-pressed="false" data-i18n="mu.side" data-icon="fa-music"></button>
+            </div>
+            <div class="wb-pane" id="wb-calc">
+              <input type="text" id="wb-calc-in" autocomplete="off" spellcheck="false" data-i18n-ph="wb.calcPh" aria-label="expression">
+              <div class="wb-calc-out" id="wb-calc-out"></div>
+              <div class="wb-keys" id="wb-keys"><button type="button" data-k="sin(">sin</button><button type="button" data-k="cos(">cos</button><button type="button" data-k="tan(">tan</button><button type="button" id="wb-deg">DEG</button><button type="button" data-k="√(">√</button><button type="button" data-k="^">xʸ</button><button type="button" data-k="(">(</button><button type="button" data-k=")">)</button><button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button><button type="button" data-k="÷" class="op">÷</button><button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button><button type="button" data-k="×" class="op">×</button><button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button><button type="button" data-k="−" class="op">−</button><button type="button" data-k="0">0</button><button type="button" data-k=".">.</button><button type="button" data-k="π">π</button><button type="button" data-k="+" class="op">+</button><button type="button" data-k="C" class="fn">C</button><button type="button" data-k="BS" class="fn">⌫</button><button type="button" data-k="ans" class="fn">ans</button><button type="button" data-k="=" class="eq">=</button></div>
+              <p class="small muted" data-i18n="wb.calcHint"></p>
+              <ul class="wb-calc-hist" id="wb-calc-hist"></ul>
+            </div>
+            <div class="wb-pane" id="wb-graph" hidden>
+              <label class="wb-fx-row"><span style="color:#1b8fd6">y =</span><input type="text" class="wb-fx" value="x^2 - 2" autocomplete="off" spellcheck="false" aria-label="f1"></label>
+              <label class="wb-fx-row"><span style="color:#e5484d">y =</span><input type="text" class="wb-fx" autocomplete="off" spellcheck="false" aria-label="f2" data-i18n-ph="wb.fxPh"></label>
+              <label class="wb-fx-row"><span style="color:#22a06b">y =</span><input type="text" class="wb-fx" autocomplete="off" spellcheck="false" aria-label="f3" data-i18n-ph="wb.fxPh"></label>
+              <div class="wb-range">
+                <label>x <input type="number" id="wb-gx0" value="-10"> ~ <input type="number" id="wb-gx1" value="10"></label>
+                <label>y <input type="number" id="wb-gy0" data-i18n-ph="wb.auto"> ~ <input type="number" id="wb-gy1" data-i18n-ph="wb.auto"></label>
+              </div>
+              <canvas id="wb-graph-cv" class="wb-graph-cv"></canvas>
+              <p class="small" id="wb-graph-err" style="color:#e5484d"></p>
+              <button class="btn btn-primary btn-block" type="button" id="wb-graph-put" data-i18n="wb.toBoard" data-icon="fa-share-from-square"></button>
+            </div>
+            <div class="wb-pane" id="wb-music" hidden>
+              <button class="btn btn-small btn-block" type="button" id="wb-staff" data-i18n="mu.staffBg" data-icon="fa-bars"></button>
+              <div id="wb-music-list"></div>
+            </div>
+            <div class="wb-pane" id="wb-quiz" hidden>
+              <label class="field"><span data-i18n="wb.q.type">題型</span>
+                <select id="wb-q-type">
+                  <option value="add" data-i18n="wb.q.add">加法</option>
+                  <option value="sub" data-i18n="wb.q.sub">減法</option>
+                  <option value="mul" data-i18n="wb.q.mul">乘法</option>
+                  <option value="div" data-i18n="wb.q.div">除法（整除）</option>
+                  <option value="mixed" data-i18n="wb.q.mixed">四則混合</option>
+                  <option value="frac" data-i18n="wb.q.frac">分數加減</option>
+                  <option value="eq" data-i18n="wb.q.eq">一元一次方程式</option>
+                  <option value="pow" data-i18n="wb.q.pow">次方與平方根</option>
+                  <option value="random" data-i18n="wb.q.random">綜合（隨機）</option>
+                </select></label>
+              <div class="wb-q-opts">
+                <label><span data-i18n="wb.q.n">題數</span><input type="number" id="wb-q-n" min="1" max="20" value="5"></label>
+                <label><span data-i18n="wb.q.d">位數</span><input type="number" id="wb-q-d" min="1" max="4" value="2"></label>
+              </div>
+              <label class="check small"><input type="checkbox" id="wb-q-neg"> <span data-i18n="wb.q.neg">包含負數</span></label>
+              <button class="btn btn-primary btn-block" type="button" id="wb-q-make" data-i18n="wb.q.make" data-icon="fa-dice"></button>
+              <ol class="wb-q-list" id="wb-q-list"></ol>
+              <label class="check small"><input type="checkbox" id="wb-q-ans"> <span data-i18n="wb.q.showAns">顯示答案</span></label>
+              <div class="toolbar">
+                <button class="btn btn-small" type="button" id="wb-q-put" disabled data-i18n="wb.q.put" data-icon="fa-share-from-square"></button>
+                <button class="btn btn-small" type="button" id="wb-q-put-ans" disabled data-i18n="wb.q.putAns" data-icon="fa-check-double"></button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 電路圖（獨立的編輯器） -->
+    <section class="panel" data-panel="circuit" hidden>
+      <div class="cb">
+        <div class="wb-bar" role="toolbar" aria-label="circuit">
+          <div class="wb-group">
+            <button class="btn btn-small" type="button" data-cbtool="select" data-i18n="cb.select" data-icon="fa-arrow-pointer"></button>
+            <button class="btn btn-small" type="button" data-cbtool="wire" data-i18n="cb.wire" data-icon="fa-route"></button>
+            <button class="btn btn-small" type="button" data-cbtool="jump" data-i18n="cb.jump" data-icon="fa-bezier-curve" data-i18n-title="cb.jumpTip"></button>
+            <button class="btn btn-small" type="button" data-cbtool="text" data-i18n="cb.text" data-icon="fa-font"></button>
+          </div>
+          <div class="wb-group">
+            <button class="btn btn-small icon-btn" type="button" id="cb-rot" data-i18n-title="wb.rot" data-i18n-aria="wb.rot"><i class="fa-solid fa-rotate" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" id="cb-del" data-i18n-title="wb.del" data-i18n-aria="wb.del"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" id="cb-undo" data-i18n-title="wb.undo" data-i18n-aria="wb.undo"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" id="cb-redo" data-i18n-title="wb.redo" data-i18n-aria="wb.redo"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i></button>
+            <button class="btn btn-small" type="button" id="cb-clear" data-i18n="wb.clearAll" data-icon="fa-trash"></button>
+          </div>
+          <div class="wb-group">
+            <button class="btn btn-small icon-btn" type="button" id="cb-png" data-i18n-title="wb.png" data-i18n-aria="wb.png"><i class="fa-solid fa-download" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" id="cb-full" data-i18n-title="wb.full" data-i18n-aria="wb.full"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
+          </div>
+          <span class="small muted cb-tip" data-i18n="cb.tip"></span>
+        </div>
+        <div class="wb-main">
+          <div class="wb-stage cb-stage" id="cb-stage">
+            <canvas id="cb-canvas"></canvas>
+            <input type="text" id="cb-label" class="cb-label" maxlength="40" hidden aria-label="label">
+          </div>
+          <aside class="wb-side card">
+            <label class="field cb-cat"><span data-i18n="cb.cat">類別</span><select id="cb-cat"></select></label>
+            <div class="wb-syms" id="cb-syms"></div>
+            <div id="cb-digital" hidden>
+              <label class="field"><span data-i18n="cb.tool">工具</span>
+                <select id="dl-tool">
+                  <option value="km" data-i18n="cb.t.km">卡諾圖化簡</option>
+                  <option value="tt" data-i18n="cb.t.tt">真值表</option>
+                  <option value="comp" data-i18n="cb.t.comp">補數</option>
+                  <option value="bcd" data-i18n="cb.t.bcd">BCD 碼</option>
+                  <option value="gray" data-i18n="cb.t.gray">格雷碼</option>
+                  <option value="base" data-i18n="cb.t.base">進位制轉換</option>
+                </select></label>
+              <div class="dl-pane" id="dl-km">
+                <label class="field"><span data-i18n="cb.km.n">變數個數</span>
+                  <select id="dl-km-n"><option value="2">2（A B）</option><option value="3" selected>3（A B C）</option><option value="4">4（A B C D）</option></select></label>
+                <p class="small muted" data-i18n="cb.km.hint"></p>
+                <div id="dl-km-grid"></div>
+                <label class="field"><span>Σm</span><input type="text" id="dl-km-m" autocomplete="off" data-i18n-ph="cb.km.mPh"></label>
+                <label class="field"><span data-i18n="cb.km.d">Don't care（d）</span><input type="text" id="dl-km-d" autocomplete="off" data-i18n-ph="cb.km.dPh"></label>
+                <div class="dl-out" id="dl-km-out"></div>
+                <button class="btn btn-small" type="button" id="dl-km-clear" data-i18n="cb.km.clear" data-icon="fa-eraser"></button>
+              </div>
+              <div class="dl-pane" id="dl-tt" hidden>
+                <label class="field"><span data-i18n="cb.tt.expr">布林式</span><input type="text" id="dl-tt-in" value="AB'+C" autocomplete="off" spellcheck="false"></label>
+                <p class="small muted" data-i18n="cb.tt.hint"></p>
+                <div class="dl-out" id="dl-tt-out"></div>
+              </div>
+              <div class="dl-pane" id="dl-comp" hidden>
+                <label class="field"><span data-i18n="cb.c.bin">二進位數</span><input type="text" id="dl-c-bin" value="0101" autocomplete="off"></label>
+                <label class="field"><span data-i18n="cb.c.bits">位元數</span><input type="number" id="dl-c-bits" min="1" max="64" value="8"></label>
+                <label class="field"><span data-i18n="cb.c.dec">十進位數（9／10 的補數）</span><input type="text" id="dl-c-dec" value="372" autocomplete="off"></label>
+                <div class="dl-out" id="dl-comp-out"></div>
+              </div>
+              <div class="dl-pane" id="dl-bcd" hidden>
+                <label class="field"><span data-i18n="cb.b.dec">十進位 → BCD</span><input type="text" id="dl-b-dec" value="259" autocomplete="off"></label>
+                <label class="field"><span data-i18n="cb.b.bcd">BCD → 十進位</span><input type="text" id="dl-b-bcd" value="0001 1000" autocomplete="off"></label>
+                <div class="dl-out" id="dl-bcd-out"></div>
+              </div>
+              <div class="dl-pane" id="dl-gray" hidden>
+                <label class="field"><span data-i18n="cb.g.b2g">二進位 → 格雷碼</span><input type="text" id="dl-g-bin" value="1011" autocomplete="off"></label>
+                <label class="field"><span data-i18n="cb.g.g2b">格雷碼 → 二進位</span><input type="text" id="dl-g-gray" value="1110" autocomplete="off"></label>
+                <div class="dl-out" id="dl-gray-out"></div>
+              </div>
+              <div class="dl-pane" id="dl-base" hidden>
+                <label class="field"><span data-i18n="cb.n.val">數值</span><input type="text" id="dl-n-val" value="255" autocomplete="off"></label>
+                <label class="field"><span data-i18n="cb.n.base">輸入的進位制</span>
+                  <select id="dl-n-base"><option value="2">2</option><option value="8">8</option><option value="10" selected>10</option><option value="16">16</option></select></label>
+                <div class="dl-out" id="dl-base-out"></div>
+              </div>
+              <button class="btn btn-primary btn-block mt" type="button" id="dl-put" data-i18n="cb.put" data-icon="fa-share-from-square"></button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- 計時器 -->
+    <section class="panel" data-panel="timer" hidden>
+      <div class="subtabs tm-modes">
+        <button class="btn btn-small" type="button" data-tm-mode="down" aria-pressed="true" data-i18n="tm.down" data-icon="fa-hourglass-half"></button>
+        <button class="btn btn-small" type="button" data-tm-mode="sw" aria-pressed="false" data-i18n="tm.sw" data-icon="fa-stopwatch"></button>
+        <button class="btn btn-small" type="button" data-tm-mode="clock" aria-pressed="false" data-i18n="tm.clock" data-icon="fa-clock"></button>
+        <span class="tm-face-pick">
+          <button class="btn btn-small" type="button" data-tm-face="digital" aria-pressed="true" data-i18n="tm.digital" data-icon="fa-hashtag"></button>
+          <button class="btn btn-small" type="button" data-tm-face="analog" aria-pressed="false" data-i18n="tm.analog" data-icon="fa-clock-rotate-left"></button>
+        </span>
+      </div>
+      <div class="card tm-card" id="tm-card">
+        <div class="tm-face" id="tm-face"></div>
+        <div class="tm-big" id="tm-big">05:00</div>
+        <div class="tm-sub" id="tm-sub"></div>
+        <div class="tm-track tm-only tm-down"><i id="tm-bar"></i></div>
+        <div class="tm-actions">
+          <button class="btn btn-primary btn-big tm-only tm-down tm-sw" type="button" id="tm-go"></button>
+          <button class="btn btn-big tm-only tm-sw" type="button" id="tm-lap" data-i18n="tm.lapBtn" data-icon="fa-flag"></button>
+          <button class="btn btn-big tm-only tm-down tm-sw" type="button" id="tm-reset" data-i18n="tm.reset" data-icon="fa-rotate-left"></button>
+          <button class="btn btn-big" type="button" id="tm-full" data-i18n="tm.full" data-icon="fa-expand"></button>
+        </div>
+        <div class="tm-only tm-down tm-presets">
+          <button class="btn btn-small" type="button" data-tm-min="1">1′</button>
+          <button class="btn btn-small" type="button" data-tm-min="3">3′</button>
+          <button class="btn btn-small" type="button" data-tm-min="5">5′</button>
+          <button class="btn btn-small" type="button" data-tm-min="10">10′</button>
+          <button class="btn btn-small" type="button" data-tm-min="15">15′</button>
+          <button class="btn btn-small" type="button" data-tm-min="30">30′</button>
+          <form class="tm-set" id="tm-set">
+            <input type="number" id="tm-m" min="0" max="999" value="5" aria-label="min"> <span data-i18n="tm.min">分</span>
+            <input type="number" id="tm-s" min="0" max="59" value="0" aria-label="sec"> <span data-i18n="tm.sec">秒</span>
+            <button class="btn btn-small" type="submit" data-i18n="tm.set" data-icon="fa-check"></button>
+          </form>
+        </div>
+        <ol class="tm-only tm-sw tm-laps" id="tm-laps"></ol>
+        <label class="tm-only tm-clock tm-zone-row"><i class="fa-solid fa-earth-asia" aria-hidden="true"></i> <span data-i18n="tm.zone"></span>
+          <select id="tm-zone" class="mini-select"></select></label>
+      </div>
+    </section>
+
+    <!-- 說明 -->
+    <section class="panel" data-panel="help" hidden>
+      <div class="card ct-help" id="ct-help" data-i18n-html="ct.help_html"></div>
+    </section>
+  </main>
+
+  <footer class="ground"></footer>
+  <!-- 第一次進網站：先說明資料只存在這台電腦 -->
+  <div class="modal" id="ct-welcome" role="dialog" aria-modal="true" aria-labelledby="ct-welcome-title">
+    <div class="modal-box ct-welcome-box">
+      <div class="modal-body">
+        <img class="ct-welcome-logo ct-logo" src="/img/classtool-logo.png" alt="">
+        <h2 id="ct-welcome-title" data-i18n="ct.welcomeTitle"></h2>
+        <p class="ct-welcome-lead"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> <span data-i18n="ct.footer"></span></p>
+        <p class="small muted" data-i18n="ct.welcomeMore"></p>
+        <a class="ct-gh" href="https://github.com/Yucheng0208/Class-Tool-Box" target="_blank" rel="noopener">
+          <i class="fa-brands fa-github ct-gh-logo" aria-hidden="true"></i>
+          <span class="ct-gh-text"><b data-i18n="ct.ghTitle"></b><small data-i18n="ct.github"></small></span>
+          <i class="fa-solid fa-star ct-gh-star" aria-hidden="true"></i>
+        </a>
+      </div>
+      <footer><button class="btn btn-primary" type="button" id="ct-welcome-ok" data-i18n="ct.welcomeOk"></button></footer>
+    </div>
+  </div>
+  <!-- 白板：公式 -->
+  <div class="modal" id="wb-formula" role="dialog" aria-modal="true" aria-labelledby="wb-formula-title">
+    <div class="modal-box">
+      <header id="wb-formula-title" data-i18n="wb.formulaTitle"></header>
+      <div class="modal-body">
+        <div class="wb-tex-btns">
+          <button type="button" class="btn btn-small" data-tex="\frac{□}{}">a/b</button>
+          <button type="button" class="btn btn-small" data-tex="\sqrt{□}">√</button>
+          <button type="button" class="btn btn-small" data-tex="^{□}">xⁿ</button>
+          <button type="button" class="btn btn-small" data-tex="_{□}">xₙ</button>
+          <button type="button" class="btn btn-small" data-tex="\times ">×</button>
+          <button type="button" class="btn btn-small" data-tex="\div ">÷</button>
+          <button type="button" class="btn btn-small" data-tex="\pm ">±</button>
+          <button type="button" class="btn btn-small" data-tex="\leq ">≤</button>
+          <button type="button" class="btn btn-small" data-tex="\geq ">≥</button>
+          <button type="button" class="btn btn-small" data-tex="\neq ">≠</button>
+          <button type="button" class="btn btn-small" data-tex="\approx ">≈</button>
+          <button type="button" class="btn btn-small" data-tex="\pi ">π</button>
+          <button type="button" class="btn btn-small" data-tex="\theta ">θ</button>
+          <button type="button" class="btn btn-small" data-tex="^{\circ}">°</button>
+          <button type="button" class="btn btn-small" data-tex="\infty ">∞</button>
+          <button type="button" class="btn btn-small" data-tex="\sum_{i=1}^{n} □">Σ</button>
+          <button type="button" class="btn btn-small" data-tex="\int_{a}^{b} □ \,dx">∫</button>
+          <button type="button" class="btn btn-small" data-tex="\lim_{x \to □}">lim</button>
+          <button type="button" class="btn btn-small" data-tex="\vec{□}">v⃗</button>
+          <button type="button" class="btn btn-small" data-tex="\overline{□}">x̄</button>
+          <button type="button" class="btn btn-small" data-tex="\begin{cases} □ \\ \end{cases}">{ cases</button>
+          <button type="button" class="btn btn-small" data-tex="\begin{bmatrix} □ & \\ & \end{bmatrix}">[ matrix ]</button>
+          <button type="button" class="btn btn-small" data-tex="\triangle ">△</button>
+          <button type="button" class="btn btn-small" data-tex="\angle ">∠</button>
+          <button type="button" class="btn btn-small" data-tex="\because ">∵</button>
+          <button type="button" class="btn btn-small" data-tex="\therefore ">∴</button>
+        </div>
+        <textarea id="wb-tex" rows="3" spellcheck="false" data-i18n-ph="wb.texPh" aria-label="LaTeX"></textarea>
+        <div class="wb-tex-view" id="wb-tex-view"></div>
+        <div class="wb-tex-ans" id="wb-tex-ans" aria-live="polite"></div>
+        <p class="small muted" data-i18n="wb.texHint"></p>
+      </div>
+      <footer>
+        <button class="btn" id="wb-tex-cancel" type="button" data-i18n="common.cancel"></button>
+        <button class="btn btn-primary" id="wb-tex-ok" type="button" data-i18n="wb.texOk" data-icon="fa-check"></button>
+      </footer>
+    </div>
+  </div>
+  <!-- 貼上名單 -->
+  <div class="modal" id="ct-paste" role="dialog" aria-modal="true" aria-labelledby="ct-paste-title">
+    <div class="modal-box">
+      <header id="ct-paste-title" data-i18n="ct.paste"></header>
+      <div class="modal-body">
+        <p class="small muted" data-i18n="ct.pasteHint"></p>
+        <textarea id="ct-paste-text" rows="12" data-i18n-ph="ct.pastePh"></textarea>
+        <p class="small" id="ct-paste-count"></p>
+      </div>
+      <footer>
+        <button class="btn" id="ct-paste-cancel" type="button" data-i18n="common.cancel"></button>
+        <button class="btn btn-primary" id="ct-paste-ok" type="button" data-i18n="ct.pasteOk" data-icon="fa-check"></button>
+      </footer>
+    </div>
+  </div>
+  <div class="win-modal hidden" id="win-modal" role="dialog" aria-modal="true" aria-label="win">
+    <div class="win-cards" id="win-names"></div>
+    <button class="btn btn-primary btn-big" id="win-close" type="button" data-i18n="lot.winOk">好！</button>
+  </div>
+  <div class="confetti" id="confetti" aria-hidden="true"></div>
+</body>
+</html>
