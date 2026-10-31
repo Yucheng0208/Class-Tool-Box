@@ -1,4 +1,4 @@
-// 座位抽籤：圖案（大叉叉、小叉叉、大十字、小十字、全班起立、全班坐下）與座標象限
+// 座位抽籤：圖案（大叉叉、小叉叉、大十字、小十字、九宮格、全班起立、全班坐下）與座標象限
 import { $, $$, esc, toast, api, burst } from './common.js';
 import { sfx, bgm } from './sound.js';
 import { t, ti } from './i18n.js';
@@ -6,8 +6,8 @@ import { seatToCell, mergeConfig } from './calc.js';
 import { S, rand, isAbsent, onChange, emit, adjust, seatMap as sharedSeatMap } from './tstate.js';
 import { popEffect, stepValue, renderPickList } from './lottery.js';
 
-const PATTERNS = ['bigX', 'smallX', 'bigCross', 'smallCross', 'standAll', 'sitAll'];
-const COORD_PATTERNS = ['bigX', 'smallX', 'bigCross', 'smallCross'];
+const PATTERNS = ['bigX', 'smallX', 'bigCross', 'smallCross', 'nine', 'standAll', 'sitAll'];
+const COORD_PATTERNS = ['bigX', 'smallX', 'bigCross', 'smallCross', 'nine'];
 const QUADS = { 1: [1, 1], 2: [-1, 1], 3: [-1, -1], 4: [1, -1] };
 let mode = 'pattern';
 let origin = null;      // { r, c }
@@ -69,6 +69,9 @@ function patternCells(name, r0, c0) {
     [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dr, dc]) => add(r0 + dr, c0 + dc));
   } else if (name === 'smallX') {
     [[0, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(([dr, dc]) => add(r0 + dr, c0 + dc));
+  } else if (name === 'nine') {
+    // 九宮格：以 (r0,c0) 為中心的 3×3
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) add(r0 + dr, c0 + dc);
   } else if (name === 'bigX') {
     // 兩條對角線，以 (r0,c0) 為交點延伸到教室邊界
     for (let k = -Math.max(rows, cols); k <= Math.max(rows, cols); k++) { add(r0 + k, c0 + k); add(r0 + k, c0 - k); }

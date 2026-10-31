@@ -53,12 +53,21 @@ export function toast(msg, type = 'info') {
     box.setAttribute('role', 'status');
     document.body.appendChild(box);
   }
+  // 同一句話還在畫面上就不再疊一張，只重新計時
+  const same = [...box.children].find((x) => x.dataset.msg === `${type}|${msg}` && !x.classList.contains('out'));
+  if (same) { clearTimeout(same._t1); clearTimeout(same._t2); arm(same); return; }
   const el = document.createElement('div');
   el.className = `toast toast-${type}`;
-  el.textContent = msg;
+  el.dataset.msg = `${type}|${msg}`;
+  const ic = { error: 'fa-triangle-exclamation', ok: 'fa-circle-check' }[type] || 'fa-circle-info';
+  el.innerHTML = `<span class="toast-ic">${icon(ic)}</span><span class="toast-msg"></span>`;
+  el.querySelector('.toast-msg').textContent = msg;
   box.appendChild(el);
-  setTimeout(() => el.classList.add('out'), 3200);
-  setTimeout(() => el.remove(), 3700);
+  arm(el);
+}
+function arm(el) {
+  el._t1 = setTimeout(() => el.classList.add('out'), 3200);
+  el._t2 = setTimeout(() => el.remove(), 3500);
 }
 
 // ---------- Cloudflare Turnstile ----------

@@ -1,9 +1,12 @@
-// 電路圖編輯器（獨立的一頁，不是白板）：放電路符號、拉導線（直角、貼齊格線）、標註元件名稱與數值；
-// 右側可以切換符號類別，或使用「數位邏輯計算」（卡諾圖、真值表、補數、BCD、格雷碼、進位制）
+// 課程套件（獨立的一頁，不是白板）：放電路符號、拉導線（直角、貼齊格線）、標註元件名稱與數值，
+// 也有白板的畫筆（各種筆、螢光筆、橡皮擦、雷射筆、直線、箭頭、形狀）方便上課說明；
+// 右側可以切換符號類別、音樂符號（可換成五線譜背景），或使用「數位邏輯計算」（卡諾圖、真值表、補數、BCD、格雷碼、進位制）
 import { $, $$, esc, toast, askConfirm } from './common.js';
 import { sfx } from './sound.js';
 import { t } from './i18n.js';
 import { SYMBOLS, CIRCUIT_GROUPS, symbolSvg } from './circuit.js';
+import { BRUSH_W, BRUSHES, INK_TYPES, drawInk, inkBox, inkHit, inkMoved, createLaser } from './draw.js';
+import { MUSIC, MUSIC_GROUPS, musicSvg } from './music.js';
 import { VARS, truthTable, simplify, kmapLayout, kmapIndex, complement, decComplement, toBCD, fromBCD, toGray, fromGray, convertBase } from './logic.js';
 
 const W = 1600, H = 1000, GRID = 20, KEY = 'ct-circuit-v1';
@@ -14,6 +17,14 @@ const stage = $('#cb-stage'), cv = $('#cb-canvas'), ctx = cv.getContext('2d'), l
 
 // ---------- 狀態 ----------
 let objs = load(), tool = 'select', sel = null, drag = null, draft = null, scale = 1;
+// 畫筆的顏色、粗細、形狀
+const COLORS = ['#12232e', '#e5484d', '#1b8fd6', '#22a06b', '#e0a800', '#9b5de5'];
+let color = COLORS[0], width = 5, shapeKind = 'rect', fillOn = false;
+const isInk = (o) => INK_TYPES.includes(o.type);
+const DRAW_TOOLS = [...BRUSHES, 'line', 'arrow', 'shape'];
+// 背景：點格（畫電路）或五線譜（放音符）
+let bgMode = 'grid';
+try { if (localStorage.getItem('ct-cb-bg') === 'staff') bgMode = 'staff'; } catch { /* 無痕模式 */ }
 const undo = [], redo = [];
 function load() {
   try {
@@ -44,6 +55,7 @@ const symSize = (o) => { const s = SYMBOLS[o.key]; return { w: (s.w + 8) * (o.s 
 function bbox(o) {
   if (o.type === 'sym') { const { w, h } = symSize(o), r = (o.rot || 0) % 180; const bw = r ? h : w, bh = r ? w : h; return { x: o.x - bw / 2, y: o.y - bh / 2, w: bw, h: bh }; }
   if (o.type === 'wire') return { x: Math.min(o.x1, o.x2) - 4, y: Math.min(o.y1, o.y2) - 4, w: Math.abs(o.x2 - o.x1) + 8, h: Math.abs(o.y2 - o.y1) + 8 };
+  if (isInk(o)) return inkBox(o);
   if (o.type === 'text') { ctx.font = `600 ${o.size}px ${FONT}`; return { x: o.x, y: o.y, w: Math.max(20, ctx.measureText(o.text).width), h: o.size * 1.2 }; }
   return { x: o.x, y: o.y, w: o.w, h: o.h };
 }
@@ -53,7 +65,9 @@ function distSeg(px, py, x1, y1, x2, y2) {
   const dx = x2 - x1, dy = y2 - y1, l = dx * dx + dy * dy, k = l ? Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / l)) : 0;
   return Math.hypot(px - (x1 + k * dx), py - (y1 + k * dy));
 }
-function hit(o, x, y) {
+function hit(o, x, y, pad = 10) {
+  // 選取時點框框裡面也算；橡皮擦只擦到線條附近
+  if (isInk(o)) return inkHit(o, x, y, pad, tool !== 'select');
   if (o.type === 'wire') { const p = wirePts(o); return distSeg(x, y, ...p[0], ...p[1]) < 8 || distSeg(x, y, ...p[1], ...p[2]) < 8; }
   const b = bbox(o);
   return x >= b.x - 6 && x <= b.x + b.w + 6 && y >= b.y - 6 && y <= b.y + b.h + 6;
@@ -67,8 +81,15 @@ function resize() {
   scale = cv.width / W;
   render();
 }
+const STAFF_TOP = 90, STAFF_STEP = 172;
 function drawGrid(g) {
   g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+  if (bgMode === 'staff') {
+    // 五線譜：一格 18px，每組五線之間空 100px（跟白板一樣）
+    g.strokeStyle = 'rgba(18,48,63,.55)'; g.lineWidth = 1.4;
+    for (let top = STAFF_TOP; top + 72 < H - 40; top += STAFF_STEP) for (let k = 0; k < 5; k++) { g.beginPath(); g.moveTo(60, top + k * 18); g.lineTo(W - 60, top + k * 18); g.stroke(); }
+    return;
+  }
   g.fillStyle = 'rgba(18, 48, 63, .18)';
   for (let x = GRID; x < W; x += GRID) for (let y = GRID; y < H; y += GRID) g.fillRect(x - 1, y - 1, 2, 2);
 }
@@ -144,7 +165,10 @@ function drawObj(g, o) {
   } else if (o.type === 'pic') {
     const im = picImg(o.src);
     if (im.complete && im.naturalWidth) g.drawImage(im, o.x, o.y, o.w, o.h);
-  }
+  } else if (o.type === 'mu') {
+    const im = picImg(musicSrc(o.key, o.c));
+    if (im.complete && im.naturalWidth) g.drawImage(im, o.x, o.y, o.w, o.h);
+  } else if (isInk(o)) drawInk(g, o, scale);
   g.restore();
 }
 function paint(g, withSel) {
@@ -153,12 +177,14 @@ function paint(g, withSel) {
   if (draft) drawObj(g, draft);
   g.fillStyle = INK;
   junctions().forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 5.5, 0, Math.PI * 2); g.fill(); });
+  if (withSel) laser.draw(g, scale);
   if (withSel && sel && objs.includes(sel)) {
     const b = bbox(sel);
     g.save(); g.setLineDash([8, 6]); g.strokeStyle = ACCENT; g.lineWidth = 2; g.strokeRect(b.x - 6, b.y - 6, b.w + 12, b.h + 12); g.restore();
   }
 }
 function render() { ctx.setTransform(scale, 0, 0, scale, 0, 0); paint(ctx, true); }
+const laser = createLaser(() => render());
 
 // ---------- 指標 ----------
 const toBoard = (e) => { const r = cv.getBoundingClientRect(); return { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * H }; };
@@ -169,6 +195,11 @@ cv.addEventListener('pointerdown', (e) => {
   const p = toBoard(e);
   if (tool === 'wire' || tool === 'jump') { const x = snap(p.x), y = snap(p.y); draft = { type: 'wire', x1: x, y1: y, x2: x, y2: y, hop: tool === 'jump' }; return; }
   if (tool === 'text') { openLabel({ x: snap(p.x, 10), y: snap(p.y, 10) }); return; }
+  if (tool === 'eraser') { snapshot(); drag = { erase: true, any: false }; eraseAt(p); return; }
+  if (tool === 'laser') { drag = { laser: true }; laser.add(p); return; }
+  if (BRUSHES.includes(tool)) { draft = { type: 'stroke', pts: [p.x, p.y], c: color, w: width * BRUSH_W[tool], brush: tool }; render(); return; }
+  if (tool === 'line' || tool === 'arrow') { draft = { type: tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y, c: color, w: width }; return; }
+  if (tool === 'shape') { draft = { type: 'shape', kind: shapeKind, fill: fillOn, x1: p.x, y1: p.y, x2: p.x, y2: p.y, c: color, w: width }; return; }
   const o = topAt(p.x, p.y);
   sel = o || null;
   if (o) { snapshot(); drag = { start: p, orig: o, moved: false }; }
@@ -176,6 +207,25 @@ cv.addEventListener('pointerdown', (e) => {
 });
 cv.addEventListener('pointermove', (e) => {
   const p = toBoard(e);
+  // 雷射筆：滑鼠移過去就有軌跡（觸控要按著畫）
+  if (tool === 'laser') { if ((drag && drag.laser) || e.pointerType === 'mouse') laser.add(p); return; }
+  if (drag && drag.erase) { eraseAt(p); return; }
+  if (draft && draft.type === 'stroke') {
+    // 合併 getCoalescedEvents，快速畫線也不會斷成折線
+    const co = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    for (const ev of co.length ? co : [e]) { const q = toBoard(ev); draft.pts.push(Math.round(q.x * 10) / 10, Math.round(q.y * 10) / 10); }
+    render(); return;
+  }
+  if (draft && draft.type !== 'wire') {
+    let { x, y } = p;
+    // 按住 Shift：直線鎖 45 度、形狀變成正的
+    if (e.shiftKey) {
+      const dx = x - draft.x1, dy = y - draft.y1;
+      if (draft.type !== 'shape') { const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4), r = Math.hypot(dx, dy); x = draft.x1 + r * Math.cos(a); y = draft.y1 + r * Math.sin(a); } else { const m = Math.max(Math.abs(dx), Math.abs(dy)); x = draft.x1 + Math.sign(dx || 1) * m; y = draft.y1 + Math.sign(dy || 1) * m; }
+    }
+    draft.x2 = x; draft.y2 = y;
+    render(); return;
+  }
   if (draft) {
     draft.x2 = snap(p.x); draft.y2 = snap(p.y);
     // 起點那段比較長的方向先走
@@ -183,21 +233,36 @@ cv.addEventListener('pointermove', (e) => {
     render(); return;
   }
   if (!drag) { cv.style.cursor = tool === 'select' ? (topAt(p.x, p.y) ? 'move' : 'default') : 'crosshair'; return; }
+  if (drag.laser) return;
   const dx = p.x - drag.start.x, dy = p.y - drag.start.y, o = drag.orig;
   if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true;
   let patch;
-  if (o.type === 'wire') { const sx = snap(dx), sy = snap(dy); patch = { x1: o.x1 + sx, y1: o.y1 + sy, x2: o.x2 + sx, y2: o.y2 + sy }; } else if (o.type === 'sym') patch = { x: snap(o.x + dx), y: snap(o.y + dy) };
+  if (isInk(o)) patch = inkMoved(o, dx, dy);
+  else if (o.type === 'wire') { const sx = snap(dx), sy = snap(dy); patch = { x1: o.x1 + sx, y1: o.y1 + sy, x2: o.x2 + sx, y2: o.y2 + sy }; } else if (o.type === 'sym') patch = { x: snap(o.x + dx), y: snap(o.y + dy) };
   else patch = { x: snap(o.x + dx, 10), y: snap(o.y + dy, 10) };
   sel = replace(sel, patch);
   render();
 });
 function up() {
+  if (drag && drag.laser) { drag = null; return; }
+  if (drag && drag.erase) { if (!drag.any) undo.pop(); drag = null; save(); sync(); return; }
+  if (draft && draft.type === 'stroke') { const d = draft; draft = null; snapshot(); objs.push(d); save(); render(); sync(); return; }
+  if (draft && draft.type !== 'wire') {
+    const d = draft; draft = null;
+    if (Math.hypot(d.x2 - d.x1, d.y2 - d.y1) >= 4) { snapshot(); objs.push(d); save(); }
+    render(); sync(); return;
+  }
   if (draft) {
     const d = draft; draft = null;
     if ([d.x1, d.y1, d.x2, d.y2].every(Number.isFinite) && (d.x1 !== d.x2 || d.y1 !== d.y2)) { snapshot(); objs.push(d); save(); sfx.tick(); }
     render(); sync(); return;
   }
   if (drag) { if (!drag.moved) undo.pop(); drag = null; save(); sync(); }
+}
+function eraseAt(p) {
+  const before = objs.length;
+  objs = objs.filter((o) => !hit(o, p.x, p.y, 14));
+  if (objs.length !== before) { drag.any = true; if (sel && !objs.includes(sel)) sel = null; render(); }
 }
 cv.addEventListener('pointerup', up);
 cv.addEventListener('pointercancel', up);
@@ -234,10 +299,40 @@ labelIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventD
 function setTool(n) { tool = n; if (n !== 'select') sel = null; sync(); render(); }
 function sync() {
   $$('[data-cbtool]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cbtool === tool)));
+  $('#cb-shape-btn').setAttribute('aria-pressed', String(tool === 'shape'));
+  $('#cb-fill').setAttribute('aria-pressed', String(fillOn));
+  $$('[data-cbcolor]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cbcolor === color)));
+  $('#cb-width').value = width; $('#cb-width-n').textContent = width;
+  const dot = $('#cb-width-dot');
+  dot.style.width = dot.style.height = `${Math.max(3, Math.min(30, width * (BRUSH_W[tool] || 1) * 0.8))}px`;
+  dot.style.background = color;
+  cv.dataset.tool = tool;
+  $('#cb-staff').setAttribute('aria-pressed', String(bgMode === 'staff'));
+  $('#cb-staff').innerHTML = `<i class="fa-solid ${bgMode === 'staff' ? 'fa-xmark' : 'fa-bars'}" aria-hidden="true"></i> <span>${esc(t(bgMode === 'staff' ? 'mu.staffOff' : 'mu.staffBg'))}</span>`;
   $('#cb-undo').disabled = !undo.length; $('#cb-redo').disabled = !redo.length;
   $('#cb-del').disabled = !sel; $('#cb-rot').disabled = !(sel && sel.type === 'sym');
 }
 $$('[data-cbtool]').forEach((b) => b.addEventListener('click', () => { commitLabel(); setTool(b.dataset.cbtool); }));
+// 形狀選單、填滿、顏色、粗細
+const shapeMenu = $('#cb-shapes');
+$('#cb-shape-btn').addEventListener('click', (e) => { e.stopPropagation(); shapeMenu.hidden = !shapeMenu.hidden; if (tool !== 'shape') setTool('shape'); });
+$$('[data-cbshape]').forEach((b) => b.addEventListener('click', () => {
+  shapeKind = b.dataset.cbshape; shapeMenu.hidden = true;
+  $('#cb-shape-btn').innerHTML = b.innerHTML;
+  setTool('shape');
+}));
+document.addEventListener('click', (e) => { if (!e.target.closest('#cb-shape-btn, #cb-shapes')) shapeMenu.hidden = true; });
+$('#cb-fill').addEventListener('click', () => { fillOn = !fillOn; if (sel && sel.type === 'shape') { snapshot(); sel = replace(sel, { fill: fillOn }); save(); render(); } sync(); });
+$('#cb-colors').innerHTML = COLORS.map((c) => `<button type="button" class="wb-swatch" data-cbcolor="${c}" style="--c:${c}" aria-label="${c}" title="${c}"></button>`).join('');
+function useColor(c) {
+  color = c;
+  // 選取中的筆畫、音符跟著換顏色
+  if (sel && (isInk(sel) || sel.type === 'mu')) { snapshot(); sel = replace(sel, { c }); save(); render(); }
+  sync();
+}
+$('#cb-colors').addEventListener('click', (e) => { const b = e.target.closest('[data-cbcolor]'); if (b) useColor(b.dataset.cbcolor); });
+$('#cb-color-in').addEventListener('input', (e) => useColor(e.target.value));
+$('#cb-width').addEventListener('input', (e) => { width = Number(e.target.value); sync(); });
 $('#cb-undo').addEventListener('click', () => restore(undo, redo));
 $('#cb-redo').addEventListener('click', () => restore(redo, undo));
 function del() { if (!sel) return; snapshot(); objs = objs.filter((o) => o !== sel); sel = null; save(); render(); sync(); }
@@ -282,16 +377,53 @@ function addPic(canvas) {
 
 // ---------- 右側：類別下拉選單 ----------
 const catSel = $('#cb-cat');
-catSel.innerHTML = CIRCUIT_GROUPS.map(([g]) => `<option value="${g}">${esc(t(`cs.g.${g}`))}</option>`).join('') + `<option value="digital">${esc(t('cb.digital'))}</option>`;
+catSel.innerHTML = CIRCUIT_GROUPS.map(([g]) => `<option value="${g}">${esc(t(`cs.g.${g}`))}</option>`).join('') + `<option value="music">${esc(t('mu.side'))}</option><option value="digital">${esc(t('cb.digital'))}</option>`;
 function showCat() {
   const g = catSel.value, group = CIRCUIT_GROUPS.find(([k]) => k === g);
   $('#cb-syms').hidden = !group;
-  $('#cb-digital').hidden = !!group;
+  $('#cb-music').hidden = g !== 'music';
+  $('#cb-digital').hidden = g !== 'digital';
   if (group) $('#cb-syms').innerHTML = group[1].map((k) => `<button type="button" class="wb-sym" data-sym="${k}" title="${esc(t(`cs.${k}`))}"><span>${symbolSvg(k, 'currentColor', 4)}</span><small>${esc(t(`cs.${k}`))}</small></button>`).join('');
   try { localStorage.setItem('ct-cb-cat', g); } catch { /* 無痕模式 */ }
 }
 catSel.addEventListener('change', showCat);
 $('#cb-syms').addEventListener('click', (e) => { const b = e.target.closest('[data-sym]'); if (b) addSym(b.dataset.sym); });
+
+// ---------- 右側：音樂符號（音符、休止符、譜號、記號） ----------
+const musicSrc = (k, c) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(musicSvg(k, c))}`;
+$('#cb-music-list').innerHTML = MUSIC_GROUPS.map(([g, keys]) => `<h4>${esc(t(`mu.g.${g}`))}</h4><div class="wb-syms wb-music">${keys.map((k) => `<button type="button" class="wb-sym" data-mu="${k}" title="${esc(t(`mu.${k}`))}"><span>${musicSvg(k)}</span><small>${esc(t(`mu.${k}`))}</small></button>`).join('')}</div>`).join('');
+// 音樂符號由左往右排在五線譜上（接在上一個符號後面；排滿就換下一行譜）
+const NOTE_KEYS = ['half', 'quarter', 'eighth', 'sixteenth', 'dotted', 'beamed', 'beamed16'];
+function musicPos(m, k) {
+  const last = [...objs].reverse().find((o) => o.type === 'mu');
+  let x = 80, top = STAFF_TOP;
+  if (last) {
+    top = STAFF_TOP + Math.max(0, Math.round((last.y + last.h / 2 - STAFF_TOP - 36) / STAFF_STEP)) * STAFF_STEP;
+    x = last.x + last.w + 14;
+    if (x + m.w > W - 60) { x = 80; top += STAFF_STEP; }
+    if (top + 72 > H - 40) top = STAFF_TOP;
+  }
+  // 音符的符頭對在第三線；其他符號置中在譜上
+  const y = NOTE_KEYS.includes(k) ? top + 36 - 62 : top + 36 - m.h / 2;
+  return { x, y };
+}
+$('#cb-music-list').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-mu]');
+  if (!b) return;
+  const k = b.dataset.mu, m = MUSIC[k];
+  // 第一次放音符時自動換成五線譜背景
+  if (bgMode !== 'staff') setBgMode('staff');
+  snapshot();
+  const o = { type: 'mu', key: k, c: color, w: m.w, h: m.h, ...musicPos(m, k) };
+  objs.push(o); sel = o; tool = 'select';
+  save(); render(); sync(); sfx.coin();
+});
+function setBgMode(m) {
+  bgMode = m;
+  try { localStorage.setItem('ct-cb-bg', m); } catch { /* 無痕模式 */ }
+  render(); sync();
+}
+$('#cb-staff').addEventListener('click', () => { setBgMode(bgMode === 'staff' ? 'grid' : 'staff'); sfx.tick(); });
 
 // ---------- 數位邏輯計算 ----------
 const dlSel = $('#dl-tool');

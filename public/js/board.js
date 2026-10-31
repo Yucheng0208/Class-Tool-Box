@@ -6,7 +6,11 @@ import { sfx } from './sound.js';
 import { t } from './i18n.js';
 import { compile, evaluate, fmt, toFraction } from './mathx.js';
 import { makeQuiz, plain } from './quiz.js';
-import { MUSIC, MUSIC_GROUPS, musicSvg } from './music.js';
+import { musicSvg } from './music.js';
+import { readInk, toExpr, handwrite, canWrite, numbersIn } from './ink.js';
+import { drawTable, drawSurface, pretty } from './plots.js';
+import { BRUSH_W, BRUSHES, drawStroke as drawStrokeOn, shapePath as shapePathOn, createLaser } from './draw.js';
+import { hasMatrix, matrixCalc, mxText, mxTex } from './matrix.js';
 
 const W = 1600, H = 1000; // 白板的邏輯尺寸（16:10），畫面上依寬度縮放
 const KEY = 'ct-board-v1';
@@ -47,8 +51,6 @@ const fontOf = (o) => `${o.size}px ${FONTS[o.font] || FONT_FAMILY}`;
 // 形狀工具目前選的形狀、要不要填滿
 let shapeKind = 'rect', fillOn = false;
 // 各種筆的實際線寬
-const BRUSH_W = { pen: 1, pencil: 0.8, brush: 1.8, water: 3, hl: 4 };
-const BRUSHES = Object.keys(BRUSH_W);
 let sel = null;              // 選取中的物件
 let draft = null;            // 畫到一半的筆畫／圖形
 let drag = null;             // 移動或縮放中的狀態
@@ -209,85 +211,9 @@ function bbox(o) {
   }
   return { x: Math.min(o.x1, o.x2) - o.w, y: Math.min(o.y1, o.y2) - o.w, w: Math.abs(o.x2 - o.x1) + 2 * o.w, h: Math.abs(o.y2 - o.y1) + 2 * o.w };
 }
-// 用中點畫二次曲線，線條比較圓滑
-function strokePath(p) {
-  ctx.beginPath();
-  ctx.moveTo(p[0], p[1]);
-  if (p.length === 2) ctx.lineTo(p[0] + 0.1, p[1]);
-  for (let i = 2; i < p.length - 2; i += 2) ctx.quadraticCurveTo(p[i], p[i + 1], (p[i] + p[i + 2]) / 2, (p[i + 1] + p[i + 3]) / 2);
-  if (p.length > 2) ctx.lineTo(p[p.length - 2], p[p.length - 1]);
-}
-function drawStroke(o) {
-  const p = o.pts, kind = o.brush || (o.hl ? 'hl' : 'pen');
-  if (kind === 'brush' && p.length > 4) {
-    // 毛筆：寫得快線條細、慢就粗；起筆、收筆尖尖的
-    const n = p.length / 2;
-    let lw = o.w;
-    for (let i = 2; i < p.length; i += 2) {
-      const d = Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]), k = i / 2 / n;
-      const taper = Math.min(1, k * 5 + 0.2, (1 - k) * 5 + 0.12);
-      lw = lw * 0.75 + o.w * Math.max(0.3, Math.min(1.4, 1.45 - d / 22)) * taper * 0.25;
-      ctx.lineWidth = Math.max(0.8, lw);
-      ctx.beginPath(); ctx.moveTo(p[i - 2], p[i - 1]); ctx.lineTo(p[i], p[i + 1]); ctx.stroke();
-    }
-    return;
-  }
-  if (kind === 'pencil') {
-    // 鉛筆：淡一點，再疊兩條錯開的細線做出筆芯顆粒感
-    ctx.globalAlpha = 0.78; strokePath(p); ctx.stroke();
-    ctx.globalAlpha = 0.28; ctx.lineWidth = Math.max(0.8, o.w * 0.45);
-    ctx.translate(0.9, 0.7); strokePath(p); ctx.stroke();
-    ctx.translate(-1.8, -1.4); strokePath(p); ctx.stroke();
-    return;
-  }
-  if (kind === 'water') {
-    // 水彩：半透明、邊緣暈開，重疊的地方會比較深
-    ctx.globalAlpha = 0.2; ctx.shadowColor = o.c; ctx.shadowBlur = o.w * scale * 0.9;
-    strokePath(p); ctx.stroke();
-    ctx.shadowBlur = 0; ctx.globalAlpha = 0.16; ctx.lineWidth = o.w * 0.55;
-    strokePath(p); ctx.stroke();
-    return;
-  }
-  ctx.globalAlpha = kind === 'hl' ? 0.35 : 1;
-  strokePath(p);
-  ctx.stroke();
-}
-// 形狀的路徑：在拖出來的方框裡畫三角形、星星…（按住 Shift 會是正的）
-function shapePath(o) {
-  const x0 = Math.min(o.x1, o.x2), y0 = Math.min(o.y1, o.y2), w = Math.abs(o.x2 - o.x1), h = Math.abs(o.y2 - o.y1);
-  const cx = x0 + w / 2, cy = y0 + h / 2;
-  const poly = (pts) => { ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); };
-  const regular = (n, inner = 0) => {
-    const pts = [];
-    const m = inner ? n * 2 : n;
-    for (let i = 0; i < m; i++) {
-      const a = -Math.PI / 2 + (i * 2 * Math.PI) / m, r = inner && i % 2 ? inner : 1;
-      pts.push([cx + (w / 2) * r * Math.cos(a), cy + (h / 2) * r * Math.sin(a)]);
-    }
-    poly(pts);
-  };
-  switch (o.kind) {
-    case 'ellipse': ctx.beginPath(); ctx.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2); break;
-    case 'tri': poly([[cx, y0], [x0 + w, y0 + h], [x0, y0 + h]]); break;
-    case 'rtri': poly([[x0, y0], [x0, y0 + h], [x0 + w, y0 + h]]); break;
-    case 'diamond': poly([[cx, y0], [x0 + w, cy], [cx, y0 + h], [x0, cy]]); break;
-    case 'pent': regular(5); break;
-    case 'hex': regular(6); break;
-    case 'star': regular(5, 0.42); break;
-    case 'heart':
-      ctx.beginPath();
-      ctx.moveTo(cx, y0 + h * 0.3);
-      ctx.bezierCurveTo(cx, y0, x0, y0, x0, y0 + h * 0.33);
-      ctx.bezierCurveTo(x0, y0 + h * 0.62, cx, y0 + h * 0.78, cx, y0 + h);
-      ctx.bezierCurveTo(cx, y0 + h * 0.78, x0 + w, y0 + h * 0.62, x0 + w, y0 + h * 0.33);
-      ctx.bezierCurveTo(x0 + w, y0, cx, y0, cx, y0 + h * 0.3);
-      ctx.closePath();
-      break;
-    case 'para': { const k = w * 0.22; poly([[x0 + k, y0], [x0 + w, y0], [x0 + w - k, y0 + h], [x0, y0 + h]]); break; }
-    case 'trap': { const k = w * 0.22; poly([[x0 + k, y0], [x0 + w - k, y0], [x0 + w, y0 + h], [x0, y0 + h]]); break; }
-    default: ctx.beginPath(); ctx.rect(x0, y0, w, h);
-  }
-}
+// 筆畫、形狀的畫法在 draw.js（電路圖也用同一套）
+const drawStroke = (o) => drawStrokeOn(ctx, o, scale);
+const shapePath = (o) => shapePathOn(ctx, o);
 function drawObj(o) {
   ctx.save();
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -332,41 +258,13 @@ function drawObj(o) {
   }
   ctx.restore();
 }
-let laser = [], laserRaf = 0;
-const LASER_MS = 900;
-function addLaser(p) {
-  laser.push({ x: p.x, y: p.y, t: performance.now() });
-  if (!laserRaf) laserRaf = requestAnimationFrame(laserLoop);
-}
-function laserLoop() {
-  const now = performance.now();
-  laser = laser.filter((q) => now - q.t < LASER_MS);
-  render();
-  laserRaf = laser.length ? requestAnimationFrame(laserLoop) : 0;
-}
-function drawLaser() {
-  if (!laser.length) return;
-  const now = performance.now();
-  ctx.save();
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.shadowColor = '#ff2d2d'; ctx.shadowBlur = 14 * scale;
-  for (let i = 1; i < laser.length; i++) {
-    const a = laser[i - 1], b = laser[i], k = 1 - (now - b.t) / LASER_MS;
-    if (Math.hypot(b.x - a.x, b.y - a.y) > 200) continue; // 換位置時不要連線
-    ctx.strokeStyle = `rgba(255, 45, 45, ${Math.max(0, k)})`;
-    ctx.lineWidth = 3 + 7 * k;
-    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-  }
-  const h = laser[laser.length - 1];
-  if (now - h.t < 300) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(h.x, h.y, 6, 0, Math.PI * 2); ctx.fill(); }
-  ctx.restore();
-}
+const laser = createLaser(() => render());
 function render() {
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   drawBg();
   for (const o of page().objs) drawObj(o);
   if (draft) drawObj(draft);
-  drawLaser();
+  laser.draw(ctx, scale);
   if (sel && page().objs.includes(sel)) {
     const b = bbox(sel);
     ctx.save();
@@ -425,6 +323,7 @@ function moved(o, dx, dy) {
 // ---------- 指標事件 ----------
 cv.addEventListener('pointerdown', (e) => {
   if (e.button > 0) return;
+  clearTimeout(inkTimer);
   commitText();
   cv.setPointerCapture(e.pointerId);
   const p = toBoard(e);
@@ -438,7 +337,7 @@ cv.addEventListener('pointerdown', (e) => {
   }
   if (tool === 'eraser') { snapshot(); drag = { mode: 'erase', any: false }; eraseAt(p); return; }
   if (tool === 'text') { e.preventDefault(); openText(p); return; }
-  if (tool === 'laser') { drag = { mode: 'laser' }; addLaser(p); return; }
+  if (tool === 'laser') { drag = { mode: 'laser' }; laser.add(p); return; }
   if (BRUSHES.includes(tool)) draft = { type: 'stroke', pts: [p.x, p.y], c: color, w: width * BRUSH_W[tool], brush: tool };
   else if (tool === 'wire') { const g = snap(p); draft = { type: 'wire', x1: g.x, y1: g.y, x2: g.x, y2: g.y, c: color, w: Math.max(2, Math.min(width, 6)) }; }
   else if (tool === 'shape') draft = { type: 'shape', kind: shapeKind, fill: fillOn, x1: p.x, y1: p.y, x2: p.x, y2: p.y, c: color, w: width };
@@ -449,7 +348,7 @@ cv.addEventListener('pointermove', (e) => {
   const p = toBoard(e);
   if (tool === 'select' && !drag) { cv.style.cursor = onHandle(p.x, p.y) ? 'nwse-resize' : topAt(p.x, p.y) ? 'move' : 'default'; return; }
   // 雷射筆：滑鼠移過去就有軌跡（觸控要按著畫）
-  if (tool === 'laser') { if (drag || e.pointerType === 'mouse') addLaser(p); return; }
+  if (tool === 'laser') { if (drag || e.pointerType === 'mouse') laser.add(p); return; }
   if (drag && drag.mode === 'erase') { eraseAt(p); return; }
   if (drag && drag.mode === 'move') {
     sel = replaceObj(sel, moved(drag.orig, p.x - drag.start.x, p.y - drag.start.y));
@@ -492,6 +391,7 @@ function endPointer() {
   const tiny = d.type !== 'stroke' && Math.hypot(d.x2 - d.x1, d.y2 - d.y1) < 4;
   if (!tiny) { snapshot(); page().objs.push(d); save(); syncBar(); }
   render();
+  if (!tiny && auto.hw && isInk(d)) inkTimer = setTimeout(() => { const r = solveInk(d); if (r) showAdjust(r); }, 1300);
 }
 cv.addEventListener('pointerup', endPointer);
 cv.addEventListener('pointercancel', endPointer);
@@ -681,36 +581,49 @@ function solve(fn) {
   }
   return roots.sort((x, y) => x - y);
 }
-// 看公式是什麼：純數字 → 算出答案；有 x 的方程式 → 解出 x；y = …（或只有 x 的式子）→ 可以畫圖
+// 看公式是什麼：純數字 → 算出答案；有 x 的方程式 → 解出 x；y = …（或只有 x 的式子）→ 可以畫圖、列表；
+// z = …（有 x 和 y）→ 3D 曲面；有矩陣 → 矩陣運算
+const hasV = (e, v) => new RegExp(`(^|[^a-z])${v}([^a-z]|$)`, 'i').test(e);
 function analyze(tex) {
+  if (hasMatrix(tex)) {
+    if (/=\s*\S/.test(tex.replace(/=\s*$/, '').replace(/^[^=]*[A-Za-z]\s*=/, ''))) return null;
+    try {
+      const v = matrixCalc(tex.replace(/^\s*[A-Za-z]\s*=/, ''), (c) => evaluate(texToExpr(c), { deg: false }));
+      return { text: `= ${mxText(v, fmt)}`, ansTex: `= ${mxTex(v, latexNum)}` };
+    } catch (e) { return { text: t(e.key || 'wb.mx.syntax', e.vars) }; }
+  }
   let expr;
   try { expr = texToExpr(tex); } catch { return null; }
   const sides = expr.split('=');
   if (sides.length > 2) return null;
-  const hasX = (e) => /(^|[^a-z])x([^a-z]|$)/i.test(e);
+  const hasX = (e) => hasV(e, 'x'), hasY = (e) => hasV(e, 'y');
   try {
     if (sides.length === 1) {
-      if (hasX(expr)) { compile(expr); return { graph: expr }; }
+      if (hasX(expr) && hasY(expr)) { compile(expr); return { surface: expr }; }
+      if (hasX(expr)) { compile(expr); return { graph: expr, table: expr }; }
+      if (hasY(expr)) return null;
       const v = evaluate(expr, { deg: false });
-      return Number.isFinite(v) ? { text: `= ${fmt(v)}${toFraction(v) ? `（${toFraction(v).n}/${toFraction(v).d}）` : ''}`, tex: `${tex} = ${latexNum(v)}` } : null;
+      return Number.isFinite(v) ? { value: v, text: `= ${fmt(v)}${toFraction(v) ? `（${toFraction(v).n}/${toFraction(v).d}）` : ''}`, tex: `${tex} = ${latexNum(v)}` } : null;
     }
     const [l, r] = sides.map((x) => x.trim());
-    if (/^(y|f\(x\))$/i.test(l) && r) { compile(r); return { graph: r }; }
+    if (/^(z|f\(x,y\))$/i.test(l) && r && !hasV(r, 'z')) { compile(r); return { surface: r }; }
+    if (/^(y|f\(x\))$/i.test(l) && r && !hasY(r)) { compile(r); return { graph: r, table: r }; }
+    if (hasY(l) || hasY(r)) return null;
     if (!hasX(l) && !hasX(r)) {
       const ok = Math.abs(evaluate(l) - evaluate(r)) < 1e-9 * Math.max(1, Math.abs(evaluate(l)));
-      return { text: ok ? '✓' : '✗', tex: `${tex} \\quad ${ok ? '\\checkmark' : '\\times'}` };
+      return { ok, text: ok ? '✓' : '✗', tex: `${tex} \\quad ${ok ? '\\checkmark' : '\\times'}` };
     }
     const fl = compile(l || '0'), fr = compile(r || '0');
     const rs = solve((sc) => fl(sc) - fr(sc));
     if (!rs.length) return { text: t('wb.noRoot'), graph: `(${l})-(${r})` };
-    return { text: `x = ${rs.map(fmt).join(', ')}`, tex: `${tex} \\;\\Rightarrow\\; x = ${rs.map(latexNum).join(',\\ ')}`, graph: `(${l})-(${r})`, roots: rs };
+    return { text: `x = ${rs.map(fmt).join(', ')}`, tex: `${tex} \;\\Rightarrow\; x = ${rs.map(latexNum).join(',\\ ')}`, graph: `(${l})-(${r})`, roots: rs };
   } catch { return null; }
 }
 const fBox = $('#wb-formula'), fSrc = $('#wb-tex'), fView = $('#wb-tex-view');
 let fInfo = null; // 目前公式的分析結果
 function showAnswer() {
   fInfo = fSrc.value.trim() ? analyze(fSrc.value.trim()) : null;
-  $('#wb-tex-ans').textContent = fInfo && fInfo.text ? `${t('wb.answer')}：${fInfo.text}` : fInfo && fInfo.graph ? t('wb.canGraph') : '';
+  $('#wb-tex-ans').textContent = fInfo && fInfo.text ? `${t('wb.answer')}：${fInfo.text}` : fInfo && fInfo.graph ? t('wb.canGraph') : fInfo && fInfo.surface ? t('wb.can3d') : '';
 }
 let fEditing = null;
 let fTimer = 0;
@@ -743,12 +656,41 @@ $$('[data-tex]').forEach((b) => b.addEventListener('click', () => {
   preview();
   showAnswer();
 }));
+// 進階：矩陣（自訂幾乘以幾），格子填好再插入到公式
+const mxGrid = $('#wb-mx-grid');
+function mxSize() {
+  const n = (id) => Math.max(1, Math.min(8, Math.round(Number($(id).value)) || 1));
+  return { r: n('#wb-mx-r'), c: n('#wb-mx-c') };
+}
+function mxBuild(fill) {
+  const { r, c } = mxSize();
+  const old = $$('input', mxGrid).reduce((m, i) => { m[i.dataset.rc] = i.value; return m; }, {});
+  mxGrid.style.gridTemplateColumns = `repeat(${c}, auto)`;
+  let html = '';
+  for (let i = 0; i < r; i++) for (let j = 0; j < c; j++) {
+    const v = fill ? fill(i, j) : (old[`${i},${j}`] ?? '');
+    html += `<input type="text" inputmode="decimal" data-rc="${i},${j}" value="${esc(String(v))}" aria-label="${i + 1},${j + 1}" placeholder="0">`;
+  }
+  mxGrid.innerHTML = html;
+}
+['#wb-mx-r', '#wb-mx-c'].forEach((id) => $(id).addEventListener('input', () => mxBuild()));
+$('#wb-mx-eye').addEventListener('click', () => mxBuild((i, j) => (i === j ? 1 : 0)));
+$('#wb-mx-zero').addEventListener('click', () => mxBuild(() => ''));
+$('#wb-mx-ins').addEventListener('click', () => {
+  const { r, c } = mxSize(), kind = $('#wb-mx-kind').value;
+  const cell = (i, j) => $(`input[data-rc="${i},${j}"]`, mxGrid)?.value.trim() || '0';
+  const rows = Array.from({ length: r }, (_, i) => Array.from({ length: c }, (_, j) => cell(i, j)).join(' & ')).join(' \\\\ ');
+  fSrc.setRangeText(`\\begin{${kind}} ${rows} \\end{${kind}}`, fSrc.selectionStart, fSrc.selectionEnd, 'end');
+  fSrc.focus();
+  preview(); showAnswer();
+});
+mxBuild();
 const closeFormula = () => { fBox.classList.remove('open'); fEditing = null; };
 $('#wb-tex-cancel').addEventListener('click', closeFormula);
 fBox.addEventListener('click', (e) => { if (e.target === fBox) closeFormula(); });
 // ---------- 寫完公式或算式：自動放上答案、函數圖形（工具列的「答案」「圖表」可以關掉） ----------
 const AUTO_KEY = 'ct-board-auto';
-let auto = { ans: true, graph: true };
+let auto = { ans: true, graph: true, hw: true };
 try { auto = { ...auto, ...JSON.parse(localStorage.getItem(AUTO_KEY) || '{}') }; } catch { /* 沒存過 */ }
 function setAuto(k) {
   auto[k] = !auto[k];
@@ -758,26 +700,228 @@ function setAuto(k) {
 }
 $('#wb-auto-ans').addEventListener('click', () => setAuto('ans'));
 $('#wb-auto-graph').addEventListener('click', () => setAuto('graph'));
+$('#wb-auto-hw').addEventListener('click', () => setAuto('hw'));
 // 文字看起來是算式才算（有運算符號或函數），一般句子、單純數字都不算
 const looksMath = (v) => /[+\-*/^×÷=√]|\b(sin|cos|tan|log|ln|sqrt)\b/i.test(v) && /\d|x/i.test(v) && !/[\u3400-\u9fff]/.test(v);
 // box：公式或文字在白板上的位置；答案放在右邊，圖表放在下面
 function autoExtras(info, box) {
   if (!info) return;
   const c = dark() ? '#9be15d' : '#22a06b';
-  if (auto.ans && info.text) {
+  if (auto.ans && info.ansTex) {
+    // 矩陣的答案也排成公式，放在右邊
+    texImage(info.ansTex, c, fontPx() * 1.1).then((r) => {
+      page().objs.push({ type: 'image', src: r.src, tex: info.ansTex, c, nw: r.w, w: r.w, h: r.h, x: Math.min(box.x + box.w + 24, W - r.w), y: box.y + box.h / 2 - r.h / 2 });
+      save(); render();
+    }).catch(() => { /* 算得出來但排不出公式就算了 */ });
+  } else if (auto.ans && info.text) {
     page().objs.push({ type: 'text', text: info.text, c, size: Math.round(Math.min(box.h, fontPx() * 1.4) * 0.8), font: fontKey, x: box.x + box.w + 24, y: box.y + Math.max(0, box.h / 2 - fontPx() * 0.5) });
   }
-  if (auto.graph && info.graph) {
-    const rs = info.roots || [];
-    let x0 = -10, x1 = 10;
-    if (rs.length) { const lo = Math.min(...rs), hi = Math.max(...rs), pd = Math.max(3, (hi - lo) * 0.4); x0 = Math.floor(lo - pd); x1 = Math.ceil(hi + pd); }
-    const cvs = document.createElement('canvas');
-    graphTo(cvs, 900, 600, dark(), { fns: [{ s: info.graph, c: '#1b8fd6' }], x0, x1, y0: NaN, y1: NaN, roots: rs });
-    const w = 480, h = 320;
-    const y = box.y + box.h + 20 + h > H ? Math.max(0, box.y - h - 20) : box.y + box.h + 20;
-    page().objs.push({ type: 'image', src: cvs.toDataURL('image/png'), x: Math.min(Math.max(0, box.x), W - w), y, w, h });
-  }
+  autoImages(info, box).forEach((o) => page().objs.push(o));
 }
+// 函數圖形、對照表、3D 曲面：回傳要放上白板的圖片（放在 box 下面，放不下就放上面）
+function autoImages(info, box, extra = {}) {
+  if (!auto.graph || !info) return [];
+  const out = [];
+  const put = (cvs, w, h) => {
+    const below = box.y + box.h + 20;
+    let x = Math.min(Math.max(0, box.x), W - w), y = below + h > H ? Math.max(0, box.y - h - 20) : below;
+    // 同一次產生的第二張圖排在第一張右邊
+    const prev = out[out.length - 1];
+    if (prev) { x = prev.x + prev.w + 20; y = prev.y; if (x + w > W) { x = Math.max(0, W - w); y = Math.min(H - h, prev.y + prev.h + 12); } }
+    out.push({ type: 'image', src: cvs.toDataURL('image/png'), x, y, w, h, ...extra });
+  };
+  try {
+    if (info.surface) { const cvs = document.createElement('canvas'); drawSurface(cvs, info.surface, dark()); put(cvs, 450, 360); }
+    if (info.graph) {
+      const rs = info.roots || [];
+      let x0 = -10, x1 = 10;
+      if (rs.length) { const lo = Math.min(...rs), hi = Math.max(...rs), pd = Math.max(3, (hi - lo) * 0.4); x0 = Math.floor(lo - pd); x1 = Math.ceil(hi + pd); }
+      const cvs = document.createElement('canvas');
+      graphTo(cvs, 900, 600, dark(), { fns: [{ s: info.graph, c: '#1b8fd6' }], x0, x1, y0: NaN, y1: NaN, roots: rs });
+      put(cvs, 480, 320);
+    }
+    if (info.table) { const cvs = document.createElement('canvas'); drawTable(cvs, info.table, dark()); put(cvs, cvs.width * 0.62, cvs.height * 0.62); }
+  } catch { /* 畫不出來就不放 */ }
+  return out;
+}
+
+// ---------- 手寫算式：用筆寫完停一下，就自動辨識、把答案寫在「=」後面（工具列的「手寫」可以關掉） ----------
+const INK_BRUSHES = ['pen', 'pencil', 'brush', 'water'];
+let inkTimer = 0;
+const isInk = (o) => o.type === 'stroke' && !o.hw && INK_BRUSHES.includes(o.brush || 'pen');
+const boxHit = (a, b, pad = 0) => a.x - pad < b.x + b.w && b.x - pad < a.x + a.w && a.y - pad < b.y + b.h && b.y - pad < a.y + a.h;
+// 從剛寫的那一筆往左右找同一行的筆畫（太大的筆畫是畫圖，不算）
+function inkLine(seed) {
+  const cand = page().objs.filter((o) => isInk(o) && (() => { const b = bbox(o); return b.h < 360 && b.w < 600; })());
+  const sb = bbox(seed);
+  const near = cand.map(bbox).filter((b) => Math.abs(b.y + b.h / 2 - (sb.y + sb.h / 2)) < 300 && b.h > 18).map((b) => b.h).sort((a, b) => a - b);
+  const Href = Math.max(40, Math.min(200, near.length ? near[Math.floor(near.length / 2)] : sb.h));
+  const line = [seed], seen = new Set(line);
+  for (let i = 0; i < line.length && line.length < 80; i++) {
+    const b = bbox(line[i]), ex = { x: b.x - Href * 0.9, y: b.y - Href * 0.3, w: b.w + Href * 1.8, h: b.h + Href * 0.6 };
+    for (const o of cand) if (!seen.has(o) && boxHit(ex, bbox(o))) { seen.add(o); line.push(o); }
+  }
+  return line;
+}
+// 答案的寫法：分數算不盡就寫成上下的分數，其他寫成小數（最多 6 位）
+function answerText(v) {
+  const f = toFraction(v), d = fmt(v);
+  if (f && d.replace(/[-.]/g, '').length > 6) return { frac: f };
+  if (Math.abs(v) >= 1e9 || (v !== 0 && Math.abs(v) < 1e-6)) return null;
+  const r = Number(v.toFixed(4));
+  return { s: `${r !== v ? '≈' : ''}${fmt(r)}`.replace('≈-', '≈ -') };
+}
+function inkWrite(str, x, mid, H, c, w, src) {
+  const { strokes, w: tw } = handwrite(str, x, mid - H / 2, H);
+  return { objs: strokes.map((pts) => ({ type: 'stroke', pts, c, w, brush: 'pen', hw: 1, hwSrc: src })), w: tw };
+}
+// quiet：從滑竿呼叫（不播音效、不重建滑竿）
+function solveInk(seed, quiet = false) {
+  if (!auto.hw || !page().objs.includes(seed)) return null;
+  const line = inkLine(seed);
+  let res;
+  try { res = readInk(line.map((o) => o.pts)); } catch { return null; }
+  if (!res.eq) return null;
+  const lb = line.map(bbox).reduce((a, b) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), x2: Math.max(a.x2, b.x + b.w), y2: Math.max(a.y2, b.y + b.h) }), { x: Infinity, y: Infinity, x2: -Infinity, y2: -Infinity });
+  const box = { x: lb.x, y: lb.y, w: lb.x2 - lb.x, h: lb.y2 - lb.y };
+  const src = [box.x, box.y, box.w, box.h];
+  const us = res.units, eqAt = us.findIndex((u) => u === res.eq);
+  const trailing = eqAt === us.length - 1 && us.filter((u) => u.s === '=').length === 1;
+  let expr = toExpr(trailing ? us.slice(0, -1) : us, trailing);
+  if (!trailing) {
+    // 寫 z = …：手寫的 z 很像 2，等號左邊只有一個「2」、右邊有 y 就當成 z
+    const [l, r] = expr.split('=');
+    if (l === '2' && /y/.test(r || '')) expr = `z=${r}`;
+  }
+  const info = analyze(expr);
+  if (!info) return null;
+  // 同一行之前自動寫的答案、圖先拿掉（改寫之後重算）
+  page().objs = page().objs.filter((o) => !(o.hwSrc && boxHit({ x: o.hwSrc[0], y: o.hwSrc[1], w: o.hwSrc[2], h: o.hwSrc[3] }, box, 4)));
+  const c = dark() ? '#9be15d' : '#22a06b', pw = Math.max(3, Math.min(8, seed.w)), Hh = res.H, mid = res.mid;
+  let ax = trailing ? res.eq.box.x1 + Hh * 0.35 : box.x + box.w + Hh * 0.9;
+  const add = [];
+  if (auto.ans) {
+    if (info.value !== undefined && trailing) {
+      const a = answerText(info.value);
+      if (a && a.s) add.push(...inkWrite(a.s, ax, mid, Hh, c, pw, src).objs);
+      else if (a && a.frac) {
+        // 上下分數：分子、分數線、分母
+        const n = `${Math.abs(a.frac.n)}`, d = `${a.frac.d}`, sz = Hh * 0.62;
+        let x0 = ax;
+        if (a.frac.n < 0) { add.push(...inkWrite('-', ax, mid, Hh, c, pw, src).objs); x0 += Hh * 0.6; }
+        const wn = handwrite(n, 0, 0, sz).w, wd = handwrite(d, 0, 0, sz).w, bw = Math.max(wn, wd) + sz * 0.3;
+        add.push(...inkWrite(n, x0 + (bw - wn) / 2, mid - sz * 0.62, sz, c, pw, src).objs);
+        add.push({ type: 'stroke', pts: [x0, mid, x0 + bw / 2, mid + 1, x0 + bw, mid], c, w: pw, brush: 'pen', hw: 1, hwSrc: src });
+        add.push(...inkWrite(d, x0 + (bw - wd) / 2, mid + sz * 0.68, sz, c, pw, src).objs);
+      }
+    } else if (info.ok !== undefined) add.push(...inkWrite(info.ok ? '✓' : '✗', ax, mid, Hh, c, pw, src).objs);
+    else if (info.roots) {
+      const str = `x = ${info.roots.map((r) => (Number.isInteger(r) ? String(r) : `${toFraction(r) && fmt(r).length > 7 ? '≈' : ''}${fmt(Number(r.toFixed(4)))}`)).join(', ')}`;
+      if (canWrite(str)) add.push(...inkWrite(str, ax, mid, Hh, c, pw, src).objs);
+    } else if (info.text && !info.graph && !info.surface) {
+      add.push({ type: 'text', text: info.text, c, size: Math.round(Hh * 0.8), font: 'hand', x: ax, y: mid - Hh * 0.5, hwSrc: src });
+    }
+  }
+  add.push(...autoImages(info, box, { hwSrc: src }));
+  page().objs.push(...add);
+  save(); render(); syncBar();
+  if (!quiet) sfx.coin();
+  // 這一行裡的數字（z = … 左邊那個當成 z 的 2 不算）
+  const byPts = new Map(line.map((o) => [o.pts, o]));
+  const nums = numbersIn(res.units).filter((n) => !(info.surface && n.units[0] === res.units[0]))
+    .map((n) => ({ value: n.value, dec: (String(n.units.map((u) => u.s).join('')).split('.')[1] || '').length, units: n.units, objs: n.units.flatMap((u) => (u.ss || []).map((p) => byPts.get(p)).filter(Boolean)) }))
+    .filter((n) => n.objs.length);
+  return { nums, seed };
+}
+
+// ---------- 調整數字：手寫算式算完後，拖滑竿改裡面的數字，答案和圖跟著變 ----------
+// 懸浮視窗：拖標題列移動（記住位置）；放在 .wb 裡面，白板全螢幕時也看得到。用筆點它不會畫到白板
+const adjBox = document.createElement('div');
+adjBox.className = 'wb-adjust';
+adjBox.hidden = true;
+adjBox.setAttribute('role', 'dialog');
+$('.wb').appendChild(adjBox);
+let adj = null, adjSnap = false, adjPos = null;
+try { adjPos = JSON.parse(localStorage.getItem('ct-board-adjpos') || 'null'); } catch { adjPos = null; }
+function placeAdjust() {
+  const r = adjBox.getBoundingClientRect(), s2 = stage.getBoundingClientRect();
+  // 第一次：放在白板右上角
+  let { x, y } = adjPos || { x: s2.right - r.width - 14, y: s2.top + 14 };
+  x = Math.max(4, Math.min(innerWidth - r.width - 4, x)); y = Math.max(4, Math.min(innerHeight - r.height - 4, y));
+  Object.assign(adjBox.style, { left: `${x}px`, top: `${y}px` });
+}
+function showAdjust(r) {
+  adj = r;
+  if (!r || !r.nums.length) { adjBox.hidden = true; return; }
+  const row = (n, i) => {
+    const max = Math.max(10, Math.ceil(Math.abs(n.value) * 2)), step = n.dec ? 10 ** -n.dec : 1;
+    return `<label class="wb-adj-row"><b>${esc(fmt(n.value))}</b><input type="range" min="0" max="${max}" step="${step}" value="${n.value}" data-adj="${i}" aria-label="${esc(fmt(n.value))}"><input type="number" min="0" step="${step}" value="${n.value}" data-adjn="${i}" aria-label="${esc(fmt(n.value))}"></label>`;
+  };
+  adjBox.innerHTML = `<div class="wb-adj-head" title="${esc(t('wb.adjDrag'))}"><span><i class="fa-solid fa-grip-vertical wb-adj-grip" aria-hidden="true"></i> <i class="fa-solid fa-sliders" aria-hidden="true"></i> ${esc(t('wb.adjust'))}</span><button type="button" class="wb-adj-x" aria-label="${esc(t('wb.adjClose'))}"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>${r.nums.slice(0, 6).map(row).join('')}`;
+  adjBox.hidden = false;
+  placeAdjust();
+  syncBar();
+}
+// 把第 i 個數字改成 v：擦掉原本的筆跡，用同樣的顏色、粗細「寫」新的數字，再重算
+function setNumber(i, v) {
+  const n = adj && adj.nums[i];
+  if (!n || !Number.isFinite(v) || v < 0 || !n.objs.every((o) => page().objs.includes(o))) { adjBox.hidden = true; return; }
+  if (!adjSnap) { snapshot(); adjSnap = true; }
+  // 第一次調整時記住數字的位置和大小，之後都寫在同一個地方（不然每次重量會越寫越大、越寫越右邊）
+  if (!n.anchor) {
+    const b = n.units.map((u) => u.box).reduce((a, c) => ({ x0: Math.min(a.x0, c.x0), y0: Math.min(a.y0, c.y0), x1: Math.max(a.x1, c.x1), y1: Math.max(a.y1, c.y1) }));
+    const digits = n.units.filter((u) => u.s !== '.');
+    const pad = Math.max(...n.objs.map((o) => o.w)) / 2; // 框量到的是含線寬的外框
+    n.anchor = { x0: b.x0 + pad, top: Math.min(...digits.map((u) => u.box.y0)) + pad, size: Math.max(...digits.map((u) => u.box.h)) - pad * 2, w: b.x1 - b.x0 - pad * 2 };
+  }
+  const A = n.anchor;
+  const str = v.toFixed(n.dec).replace(/^-/, '');
+  const hw = handwrite(str, A.x0, A.top, A.size);
+  // 數字變長（或變短）：後面的字整個往右（左）移，跨過去的根號橫線、分數線拉長
+  const newW = hw.w - A.size * 0.12, edge = A.x0 + A.w, delta = newW - A.w;
+  const line = inkLine(n.objs[0]).filter((o) => !n.objs.includes(o));
+  const shift = (pts) => pts.map((q, j) => (j % 2 || q <= edge ? q : Math.round((q + delta) * 10) / 10));
+  for (const o of line) { const i2 = page().objs.indexOf(o); if (i2 >= 0) page().objs[i2] = { ...o, pts: shift(o.pts) }; }
+  A.w = newW;
+  adj.nums.forEach((m) => { if (m !== n && m.anchor && m.anchor.x0 > edge) m.anchor.x0 += delta; });
+  const proto = n.objs[0];
+  const fresh = hw.strokes.map((pts) => ({ type: 'stroke', pts, c: proto.c, w: proto.w, brush: proto.brush }));
+  page().objs = page().objs.filter((o) => !n.objs.includes(o));
+  page().objs.push(...fresh);
+  const keep = adj;
+  const r = solveInk(fresh[0], true);
+  // 重算後把新的筆畫接回滑竿（數字的個數一樣就不重建，拖到一半才不會斷）
+  if (r && r.nums.length === keep.nums.length) { r.nums.forEach((m, j) => { m.anchor = keep.nums[j].anchor; }); keep.nums = r.nums; adj = keep; adj.seed = r.seed; adjBox.querySelectorAll('.wb-adj-row b')[i].textContent = fmt(v); } else showAdjust(r);
+}
+adjBox.addEventListener('input', (e) => {
+  const el = e.target, i = Number(el.dataset.adj ?? el.dataset.adjn), v = Number(el.value);
+  if (!Number.isInteger(i) || el.value === '') return;
+  const other = adjBox.querySelector(el.dataset.adj !== undefined ? `[data-adjn="${i}"]` : `[data-adj="${i}"]`);
+  if (other) { if (other.type === 'range' && v > Number(other.max)) other.max = String(v); other.value = String(v); }
+  setNumber(i, v);
+});
+adjBox.addEventListener('change', () => { adjSnap = false; sfx.tick(); });
+adjBox.addEventListener('click', (e) => { if (e.target.closest('.wb-adj-x')) { adjBox.hidden = true; syncBar(); } });
+// 拖標題列移動視窗
+adjBox.addEventListener('pointerdown', (e) => {
+  const head = e.target.closest('.wb-adj-head');
+  if (!head || e.target.closest('button')) return;
+  e.preventDefault();
+  const r = adjBox.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+  head.setPointerCapture(e.pointerId);
+  const move = (ev) => { adjPos = { x: ev.clientX - dx, y: ev.clientY - dy }; placeAdjust(); };
+  const end = () => {
+    head.removeEventListener('pointermove', move); head.removeEventListener('pointerup', end); head.removeEventListener('pointercancel', end);
+    try { localStorage.setItem('ct-board-adjpos', JSON.stringify(adjPos)); } catch { /* 無痕模式 */ }
+  };
+  head.addEventListener('pointermove', move); head.addEventListener('pointerup', end); head.addEventListener('pointercancel', end);
+});
+addEventListener('resize', () => { if (!adjBox.hidden) placeAdjust(); });
+// 工具列的「調整」：重新打開上一次的調整視窗
+$('#wb-adjust-btn').addEventListener('click', () => {
+  if (!adjBox.hidden) { adjBox.hidden = true; syncBar(); return; }
+  if (adj && adj.nums.length && adj.nums.every((n) => n.objs.every((o) => page().objs.includes(o)))) { adjBox.hidden = false; placeAdjust(); syncBar(); } else toast(t('wb.adjNone'));
+});
 async function putFormula() {
   const tex = fSrc.value.trim();
   if (!tex) { closeFormula(); return; }
@@ -815,6 +959,8 @@ function syncBar() {
   wIn.value = width;
   $('#wb-auto-ans').setAttribute('aria-pressed', String(auto.ans));
   $('#wb-auto-graph').setAttribute('aria-pressed', String(auto.graph));
+  $('#wb-auto-hw').setAttribute('aria-pressed', String(auto.hw));
+  $('#wb-adjust-btn').setAttribute('aria-pressed', String(!adjBox.hidden));
   $('#wb-shape-btn').setAttribute('aria-pressed', String(tool === 'shape'));
   $('#wb-fill').setAttribute('aria-pressed', String(fillOn));
   fsIn.value = textSize;
@@ -1143,7 +1289,7 @@ function graphTo(c, wPx, hPx, onDark, opt = panelGraph()) {
       g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillText(`x = ${fmt(r)}`, X(r), Y(0) - hPx / 60);
     });
     g.fillStyle = f.c; g.textAlign = 'left'; g.textBaseline = 'top';
-    g.fillText(`y = ${f.s.replace(/^y\s*=\s*/i, '')}`, fs, fs * (0.6 + k * 1.3));
+    g.fillText(`y = ${pretty(f.s.replace(/^y\s*=\s*/i, ''))}`, fs, fs * (0.6 + k * 1.3));
   });
   return fns.some((f) => f.bad);
 }
@@ -1205,32 +1351,8 @@ function rotateSel() {
 }
 $('#wb-rot').addEventListener('click', rotateSel);
 
-// ---------- 右側：音樂符號（音符、休止符、譜號、記號） ----------
+// 以前放在白板上的音樂符號（現在改到「課程套件」）：換顏色時要重畫
 const musicSrc = (k, c) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(musicSvg(k, c))}`;
-$('#wb-music-list').innerHTML = MUSIC_GROUPS.map(([g, keys]) => `<h4>${esc(t(`mu.g.${g}`))}</h4><div class="wb-syms wb-music">${keys.map((k) => `<button type="button" class="wb-sym" data-mu="${k}" title="${esc(t(`mu.${k}`))}"><span>${musicSvg(k)}</span><small>${esc(t(`mu.${k}`))}</small></button>`).join('')}</div>`).join('');
-$('#wb-music-list').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-mu]');
-  if (!b) return;
-  const k = b.dataset.mu, m = MUSIC[k], c = dark() && color === COLORS[0] ? '#ffffff' : color;
-  addImage(musicSrc(k, c), m.w, m.h, { mu: k, c, ...musicPos(m, k) });
-});
-// 音樂符號由左往右排在五線譜上（接在上一個符號後面；排滿就換下一行譜）
-const STAFF_TOP = 90, STAFF_STEP = 172, NOTE_KEYS = ['half', 'quarter', 'eighth', 'sixteenth', 'dotted', 'beamed', 'beamed16'];
-function musicPos(m, k) {
-  const last = [...page().objs].reverse().find((o) => o.mu);
-  let x = 80, top = STAFF_TOP;
-  if (last) {
-    // 上一個符號在第幾行譜
-    top = STAFF_TOP + Math.max(0, Math.round((last.y + last.h / 2 - STAFF_TOP - 36) / STAFF_STEP)) * STAFF_STEP;
-    x = last.x + last.w + 14;
-    if (x + m.w > W - 60) { x = 80; top += STAFF_STEP; }
-    if (top + 72 > H - 40) top = STAFF_TOP;
-  }
-  // 音符的符頭對在第三線；其他符號置中在譜上
-  const y = NOTE_KEYS.includes(k) ? top + 36 - 62 : top + 36 - m.h / 2;
-  return { x, y };
-}
-$('#wb-staff').addEventListener('click', () => { setBg({ p: 'staff' }); sfx.tick(); });
 
 // ---------- 右側分頁 ----------
 $$('[data-wbside]').forEach((b) => b.addEventListener('click', () => {

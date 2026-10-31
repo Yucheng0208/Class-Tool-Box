@@ -142,9 +142,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 
 /* ---------- 提示、對話框、表格 ---------- */
-.toast { border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--soft-shadow); background: var(--panel); }
-.toast-error { border-left: 6px solid #e5484d; }
-.toast-ok { border-left: 6px solid #16a34a; }
+/* 通知：白色卡片＋左邊一個小圖示 */
+#toast-box { width: max-content; max-width: min(92vw, 440px); justify-items: center; }
+.toast, .toast-error, .toast-ok {
+  display: flex; align-items: center; gap: 10px; padding: 11px 16px 11px 13px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--fg);
+  box-shadow: 0 10px 30px -12px rgba(18, 35, 46, .28), 0 2px 6px rgba(18, 35, 46, .06);
+  font-weight: 600; font-size: 15px; line-height: 1.4;
+  animation: toast-in .22s ease-out;
+}
+:root[data-theme="dark"] .toast { box-shadow: 0 12px 32px -12px rgba(0, 0, 0, .8); }
+.toast-ic { flex: none; font-size: 17px; color: var(--accent); }
+.toast-error .toast-ic { color: #e5a000; }
+.toast-ok .toast-ic { color: #16a34a; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } }
 .alert { border: 1px solid var(--border); border-radius: 12px; }
 .modal-box { border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .5); overflow: hidden; }
 .modal-box header { background: var(--panel); color: var(--fg); border-bottom: 1px solid var(--border); }

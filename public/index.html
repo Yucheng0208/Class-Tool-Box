@@ -27,7 +27,7 @@
   </header>
 
   <main id="dash-view">
-    <nav class="tabs" role="tablist">
+    <nav class="tabs tabs-v2" role="tablist">
       <button class="btn tab" role="tab" data-tab="roster" aria-selected="true" data-i18n="ct.tab.roster" data-icon="fa-users"></button>
       <button class="btn tab" role="tab" data-tab="lottery" aria-selected="false" data-i18n="t.tab.lottery" data-icon="fa-shuffle"></button>
       <button class="btn tab" role="tab" data-tab="seats" aria-selected="false" data-i18n="t.tab.seats" data-icon="fa-chair"></button>
@@ -264,6 +264,7 @@
               <option value="smallCross" data-i18n="pat.smallCross">小十字 +</option>
               <option value="bigX" data-i18n="pat.bigX">大叉叉 ✖</option>
               <option value="smallX" data-i18n="pat.smallX">小叉叉 ×</option>
+              <option value="nine" data-i18n="pat.nine">九宮格 ▦</option>
               <option value="rand" data-i18n="seat.cp.rand">隨機圖案</option>
             </select></label>
           <button class="btn btn-primary" id="coord-btn" type="button" data-i18n="lot.start" data-icon="fa-play"></button>
@@ -436,6 +437,8 @@
           <div class="wb-group">
             <button class="btn btn-small" type="button" id="wb-auto-ans" data-i18n="wb.autoAns" data-icon="fa-equals" data-i18n-title="wb.autoAnsTip"></button>
             <button class="btn btn-small" type="button" id="wb-auto-graph" data-i18n="wb.autoGraph" data-icon="fa-chart-line" data-i18n-title="wb.autoGraphTip"></button>
+            <button class="btn btn-small" type="button" id="wb-auto-hw" data-i18n="wb.autoHw" data-icon="fa-signature" data-i18n-title="wb.autoHwTip"></button>
+            <button class="btn btn-small" type="button" id="wb-adjust-btn" data-i18n="wb.adjBtn" data-icon="fa-sliders" data-i18n-title="wb.adjTip"></button>
           </div>
           <div class="wb-group">
             <button class="btn btn-small" type="button" id="wb-formula-btn" data-i18n="wb.formula" data-icon="fa-square-root-variable"></button>
@@ -491,7 +494,6 @@
               <button class="btn btn-small" type="button" data-wbside="calc" aria-pressed="true" data-i18n="wb.calc" data-icon="fa-calculator"></button>
               <button class="btn btn-small" type="button" data-wbside="graph" aria-pressed="false" data-i18n="wb.graph" data-icon="fa-chart-line"></button>
               <button class="btn btn-small" type="button" data-wbside="quiz" aria-pressed="false" data-i18n="wb.quiz" data-icon="fa-shuffle"></button>
-              <button class="btn btn-small" type="button" data-wbside="music" aria-pressed="false" data-i18n="mu.side" data-icon="fa-music"></button>
             </div>
             <div class="wb-pane" id="wb-calc">
               <input type="text" id="wb-calc-in" autocomplete="off" spellcheck="false" data-i18n-ph="wb.calcPh" aria-label="expression">
@@ -511,10 +513,6 @@
               <canvas id="wb-graph-cv" class="wb-graph-cv"></canvas>
               <p class="small" id="wb-graph-err" style="color:#e5484d"></p>
               <button class="btn btn-primary btn-block" type="button" id="wb-graph-put" data-i18n="wb.toBoard" data-icon="fa-share-from-square"></button>
-            </div>
-            <div class="wb-pane" id="wb-music" hidden>
-              <button class="btn btn-small btn-block" type="button" id="wb-staff" data-i18n="mu.staffBg" data-icon="fa-bars"></button>
-              <div id="wb-music-list"></div>
             </div>
             <div class="wb-pane" id="wb-quiz" hidden>
               <label class="field"><span data-i18n="wb.q.type">題型</span>
@@ -548,7 +546,7 @@
     </section>
 
 
-    <!-- 電路圖（獨立的編輯器） -->
+    <!-- 課程套件：電路符號、音樂符號、畫筆（獨立的編輯器） -->
     <section class="panel" data-panel="circuit" hidden>
       <div class="cb">
         <div class="wb-bar" role="toolbar" aria-label="circuit">
@@ -557,6 +555,31 @@
             <button class="btn btn-small" type="button" data-cbtool="wire" data-i18n="cb.wire" data-icon="fa-route"></button>
             <button class="btn btn-small" type="button" data-cbtool="jump" data-i18n="cb.jump" data-icon="fa-bezier-curve" data-i18n-title="cb.jumpTip"></button>
             <button class="btn btn-small" type="button" data-cbtool="text" data-i18n="cb.text" data-icon="fa-font"></button>
+          </div>
+          <div class="wb-group">
+            <button class="btn btn-small icon-btn" type="button" data-cbtool="pen" data-i18n-title="wb.t.pen" data-i18n-aria="wb.t.pen"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-cbtool="pencil" data-i18n-title="wb.t.pencil" data-i18n-aria="wb.t.pencil"><i class="fa-solid fa-pencil" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-cbtool="brush" data-i18n-title="wb.t.brush" data-i18n-aria="wb.t.brush"><i class="fa-solid fa-paintbrush" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-cbtool="water" data-i18n-title="wb.t.water" data-i18n-aria="wb.t.water"><i class="fa-solid fa-droplet" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-cbtool="hl" data-i18n-title="wb.t.hl" data-i18n-aria="wb.t.hl"><i class="fa-solid fa-highlighter" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-cbtool="laser" data-i18n-title="wb.t.laser" data-i18n-aria="wb.t.laser"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-cbtool="eraser" data-i18n-title="wb.t.eraser" data-i18n-aria="wb.t.eraser"><i class="fa-solid fa-eraser" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-cbtool="line" data-i18n-title="wb.t.line" data-i18n-aria="wb.t.line"><i class="fa-solid fa-minus" aria-hidden="true"></i></button>
+            <button class="btn btn-small icon-btn" type="button" data-cbtool="arrow" data-i18n-title="wb.t.arrow" data-i18n-aria="wb.t.arrow"><i class="fa-solid fa-arrow-right-long" aria-hidden="true"></i></button>
+            <span class="wb-shape-wrap">
+              <button class="btn btn-small icon-btn" type="button" id="cb-shape-btn" data-i18n-title="wb.t.shape" data-i18n-aria="wb.t.shape"><i class="fa-regular fa-square"></i></button>
+              <div class="wb-shapes" id="cb-shapes" hidden><button type="button" class="wb-shape" data-cbshape="rect" data-i18n-title="wb.sh.rect" data-i18n-aria="wb.sh.rect"><i class="fa-regular fa-square"></i></button><button type="button" class="wb-shape" data-cbshape="ellipse" data-i18n-title="wb.sh.ellipse" data-i18n-aria="wb.sh.ellipse"><i class="fa-regular fa-circle"></i></button><button type="button" class="wb-shape" data-cbshape="tri" data-i18n-title="wb.sh.tri" data-i18n-aria="wb.sh.tri"><svg viewBox="0 0 24 24"><path d="M12 3L22 21H2z"/></svg></button><button type="button" class="wb-shape" data-cbshape="rtri" data-i18n-title="wb.sh.rtri" data-i18n-aria="wb.sh.rtri"><svg viewBox="0 0 24 24"><path d="M3 3V21H21z"/></svg></button><button type="button" class="wb-shape" data-cbshape="diamond" data-i18n-title="wb.sh.diamond" data-i18n-aria="wb.sh.diamond"><svg viewBox="0 0 24 24"><path d="M12 2L22 12 12 22 2 12z"/></svg></button><button type="button" class="wb-shape" data-cbshape="pent" data-i18n-title="wb.sh.pent" data-i18n-aria="wb.sh.pent"><svg viewBox="0 0 24 24"><path d="M12 2l10 7.3-3.8 11.7H5.8L2 9.3z"/></svg></button><button type="button" class="wb-shape" data-cbshape="hex" data-i18n-title="wb.sh.hex" data-i18n-aria="wb.sh.hex"><svg viewBox="0 0 24 24"><path d="M7 3h10l5 9-5 9H7l-5-9z"/></svg></button><button type="button" class="wb-shape" data-cbshape="star" data-i18n-title="wb.sh.star" data-i18n-aria="wb.sh.star"><svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 21l1.6-7L2 9.2l7.1-.6z"/></svg></button><button type="button" class="wb-shape" data-cbshape="heart" data-i18n-title="wb.sh.heart" data-i18n-aria="wb.sh.heart"><svg viewBox="0 0 24 24"><path d="M12 21C5 15.5 2 12 2 8.2 2 5.3 4.3 3 7.1 3c1.9 0 3.6 1 4.9 2.7C13.3 4 15 3 16.9 3 19.7 3 22 5.3 22 8.2 22 12 19 15.5 12 21z"/></svg></button><button type="button" class="wb-shape" data-cbshape="para" data-i18n-title="wb.sh.para" data-i18n-aria="wb.sh.para"><svg viewBox="0 0 24 24"><path d="M7 5h15l-5 14H2z"/></svg></button><button type="button" class="wb-shape" data-cbshape="trap" data-i18n-title="wb.sh.trap" data-i18n-aria="wb.sh.trap"><svg viewBox="0 0 24 24"><path d="M7 5h10l5 14H2z"/></svg></button></div>
+            </span>
+            <button class="btn btn-small icon-btn" type="button" id="cb-fill" data-i18n-title="wb.fill" data-i18n-aria="wb.fill"><i class="fa-solid fa-fill-drip" aria-hidden="true"></i></button>
+          </div>
+          <div class="wb-group">
+            <div class="wb-colors" id="cb-colors"></div>
+            <label class="wb-picker" data-i18n-title="wb.pick"><input type="color" id="cb-color-in" value="#12232e" data-i18n-aria="wb.pick"><i class="fa-solid fa-palette" aria-hidden="true"></i></label>
+          </div>
+          <div class="wb-group wb-width">
+            <span class="wb-width-dot-box"><i id="cb-width-dot"></i></span>
+            <input type="range" id="cb-width" min="1" max="40" value="5" data-i18n-aria="wb.width" data-i18n-title="wb.width">
+            <b id="cb-width-n">5</b>
           </div>
           <div class="wb-group">
             <button class="btn btn-small icon-btn" type="button" id="cb-rot" data-i18n-title="wb.rot" data-i18n-aria="wb.rot"><i class="fa-solid fa-rotate" aria-hidden="true"></i></button>
@@ -579,6 +602,10 @@
           <aside class="wb-side card">
             <label class="field cb-cat"><span data-i18n="cb.cat">類別</span><select id="cb-cat"></select></label>
             <div class="wb-syms" id="cb-syms"></div>
+            <div id="cb-music" hidden>
+              <button class="btn btn-small btn-block" type="button" id="cb-staff"></button>
+              <div id="cb-music-list"></div>
+            </div>
             <div id="cb-digital" hidden>
               <label class="field"><span data-i18n="cb.tool">工具</span>
                 <select id="dl-tool">
@@ -671,6 +698,10 @@
         <ol class="tm-only tm-sw tm-laps" id="tm-laps"></ol>
         <label class="tm-only tm-clock tm-zone-row"><i class="fa-solid fa-earth-asia" aria-hidden="true"></i> <span data-i18n="tm.zone"></span>
           <select id="tm-zone" class="mini-select"></select></label>
+        <div class="tm-only tm-clock tm-hours" role="group" aria-label="12/24">
+          <button class="btn btn-small" type="button" data-tm-h="24" aria-pressed="true" data-i18n="tm.h24"></button>
+          <button class="btn btn-small" type="button" data-tm-h="12" aria-pressed="false" data-i18n="tm.h12"></button>
+        </div>
       </div>
     </section>
 
@@ -731,6 +762,35 @@
           <button type="button" class="btn btn-small" data-tex="\because ">∵</button>
           <button type="button" class="btn btn-small" data-tex="\therefore ">∴</button>
         </div>
+        <details class="wb-mx" id="wb-mx">
+          <summary data-i18n="wb.mx.title">進階：矩陣運算</summary>
+          <div class="wb-mx-bar">
+            <label><span data-i18n="wb.mx.rows">列</span> <input type="number" id="wb-mx-r" min="1" max="8" value="2"></label>
+            <span aria-hidden="true">×</span>
+            <label><span data-i18n="wb.mx.cols">行</span> <input type="number" id="wb-mx-c" min="1" max="8" value="2"></label>
+            <select id="wb-mx-kind" aria-label="bracket">
+              <option value="bmatrix">[ ]</option>
+              <option value="pmatrix">( )</option>
+              <option value="vmatrix" data-i18n="wb.mx.det">| |（行列式）</option>
+            </select>
+            <button type="button" class="btn btn-small" id="wb-mx-eye" data-i18n="wb.mx.eye"></button>
+            <button type="button" class="btn btn-small" id="wb-mx-zero" data-i18n="wb.mx.clear"></button>
+          </div>
+          <div class="wb-mx-grid" id="wb-mx-grid"></div>
+          <div class="wb-mx-bar">
+            <button type="button" class="btn btn-small btn-primary" id="wb-mx-ins" data-i18n="wb.mx.insert" data-icon="fa-plus"></button>
+          </div>
+          <div class="wb-tex-btns">
+            <button type="button" class="btn btn-small" data-tex="+">A + B</button>
+            <button type="button" class="btn btn-small" data-tex="-">A − B</button>
+            <button type="button" class="btn btn-small" data-tex="\times ">A × B</button>
+            <button type="button" class="btn btn-small" data-tex="^{T}">Aᵀ</button>
+            <button type="button" class="btn btn-small" data-tex="^{-1}">A⁻¹</button>
+            <button type="button" class="btn btn-small" data-tex="^{□}">Aⁿ</button>
+            <button type="button" class="btn btn-small" data-tex="\det ">det</button>
+          </div>
+          <p class="small muted" data-i18n="wb.mx.hint"></p>
+        </details>
         <textarea id="wb-tex" rows="3" spellcheck="false" data-i18n-ph="wb.texPh" aria-label="LaTeX"></textarea>
         <div class="wb-tex-view" id="wb-tex-view"></div>
         <div class="wb-tex-ans" id="wb-tex-ans" aria-live="polite"></div>

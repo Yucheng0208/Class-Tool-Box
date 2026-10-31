@@ -58,12 +58,21 @@ function sector(deg) {
   return `<path d="M100 100L100 22A78 78 0 ${deg > 180 ? 1 : 0} 1 ${x.toFixed(2)} ${y.toFixed(2)}Z" class="tm-sector"/>`;
 }
 const DIAL_CLOCK = dial(['12', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']);
+// 24 小時制：內圈再加 13～24
+const DIAL_CLOCK24 = DIAL_CLOCK + ['24', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23'].map((l, i) => { const [x, y] = polar(50, i * 30); return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="tm-num tm-num24">${l}</text>`; }).join('');
+// 時鐘顯示 24 小時制或 12 小時制（上午／下午）
+let h12 = store.get('ct-tm-h12') === '1';
+function setHours(v) {
+  h12 = v;
+  store.set('ct-tm-h12', h12 ? '1' : '0');
+  $$('[data-tm-h]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.tmH === '12') === h12)));
+}
 const DIAL_MIN = dial(['0', '5', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55']);
 function drawFace(ms) {
   let body;
   if (mode === 'clock') {
     const z = zoneTime(new Date()), min = z.m + z.s / 60, hr = (z.h % 12) + min / 60;
-    body = DIAL_CLOCK + hand(hr * 30, 46, 'tm-hand hr') + hand(min * 6, 66, 'tm-hand min') + hand(z.s * 6, 76, 'tm-hand sec', 18);
+    body = (h12 ? DIAL_CLOCK : DIAL_CLOCK24) + hand(hr * 30, 46, 'tm-hand hr') + hand(min * 6, 66, 'tm-hand min') + hand(z.s * 6, 76, 'tm-hand sec', 18);
   } else if (mode === 'sw') {
     // 大指針：秒；小錶盤：分鐘（一圈 30 分）
     const sec = (ms / 1000) % 60, min = (ms / 60000) % 30;
@@ -171,7 +180,7 @@ function draw() {
     note = sw.laps.length ? t('tm.laps', { n: sw.laps.length }) : '';
   } else {
     const d = new Date();
-    text = d.toLocaleTimeString(lang, { timeZone: tz(), hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    text = d.toLocaleTimeString(lang, { timeZone: tz(), hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: h12 });
     note = `${d.toLocaleDateString(lang, { timeZone: tz(), year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}　${zoneName(tz())} ${offsetOf(tz())}`;
   }
   big.textContent = text;
@@ -197,6 +206,7 @@ $$('[data-tm-mode]').forEach((b) => b.addEventListener('click', () => {
   sfx.tick();
   draw();
 }));
+$$('[data-tm-h]').forEach((b) => b.addEventListener('click', () => { setHours(b.dataset.tmH === '12'); sfx.tick(); draw(); }));
 pill.addEventListener('click', () => { $('.tab[data-tab="timer"]').click(); });
 $('#tm-full').addEventListener('click', () => {
   if (document.fullscreenElement) document.exitFullscreen();
@@ -209,5 +219,6 @@ document.addEventListener('keydown', (e) => {
 });
 $$('.tm-only').forEach((el) => { el.hidden = !el.classList.contains('tm-down'); });
 fillZones();
+setHours(h12);
 setFace(face);
 setDown(down.total);

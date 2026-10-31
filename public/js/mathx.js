@@ -1,5 +1,5 @@
 // 白板的計算機與函數圖形共用：安全的算式解析（不用 eval）
-// 支援 + − × ÷ ^ % !、括號、隱含乘法（2x、3(4+1)、2π）、常數 π e、ans，
+// 支援 + − × ÷ ^ % !、括號、隱含乘法（2x、3(4+1)、2π）、常數 π e、ans、變數 x y，
 // 函數 sin cos tan asin acos atan sqrt √ cbrt abs ln log log2 exp floor ceil round
 const FUNCS = {
   sin: Math.sin, cos: Math.cos, tan: Math.tan, asin: Math.asin, acos: Math.acos, atan: Math.atan,
@@ -23,7 +23,7 @@ function tokenize(src) {
     if (id) {
       let w = id[0].toLowerCase();
       // 「sinx」「2pix」這類黏在一起的：先找最長的函數／常數名稱
-      const known = ['asin', 'acos', 'atan', 'sqrt', 'cbrt', 'log2', 'floor', 'ceil', 'round', 'sin', 'cos', 'tan', 'abs', 'exp', 'log', 'ln', 'ans', 'pi', 'e', 'x'];
+      const known = ['asin', 'acos', 'atan', 'sqrt', 'cbrt', 'log2', 'floor', 'ceil', 'round', 'sin', 'cos', 'tan', 'abs', 'exp', 'log', 'ln', 'ans', 'pi', 'e', 'x', 'y'];
       const k = known.find((n) => w.startsWith(n));
       if (!k) throw new Error(`?${w}`);
       w = k;
@@ -89,6 +89,7 @@ export function compile(src) {
       if (t.v === 'pi') return () => Math.PI;
       if (t.v === 'e') return () => Math.E;
       if (t.v === 'x') return (s) => s.x;
+      if (t.v === 'y') return (s) => s.y ?? 0;
       return (s) => s.ans ?? 0;
     }
     if (t.t === 'f') {

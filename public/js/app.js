@@ -17,9 +17,31 @@ const remember = (k, v) => { try { if (v === undefined) return localStorage.getI
 const fileName = (s) => String(s).replace(/[\\/:*?"<>|]/g, '_');
 
 // ================= 分頁 =================
+// 選中的分頁底下有一塊漸層色塊，切換時滑過去（手機是格狀，也會上下滑）
+const tabsNav = $('.tabs');
+const ink = document.createElement('span');
+ink.className = 'tab-ink no-anim';
+ink.setAttribute('aria-hidden', 'true');
+tabsNav.prepend(ink);
+function moveInk(animate = true) {
+  const cur = $('.tab[aria-selected="true"]', tabsNav);
+  if (!cur || !cur.offsetWidth) return;
+  ink.classList.toggle('no-anim', !animate);
+  Object.assign(ink.style, { width: `${cur.offsetWidth}px`, height: `${cur.offsetHeight}px`, transform: `translate(${cur.offsetLeft}px, ${cur.offsetTop}px)` });
+  tabsNav.classList.add('ink-on');
+}
+// 換語言、視窗大小改變時分頁寬度會變，色塊直接跟上（不播動畫）
+new ResizeObserver(() => moveInk(false)).observe(tabsNav);
+$$('.tab', tabsNav).forEach((tb) => new ResizeObserver(() => moveInk(false)).observe(tb));
 function showTab(tab) {
+  const was = $('.tab[aria-selected="true"]')?.dataset.tab;
   $$('.tab').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.tab === tab)));
-  $$('.panel').forEach((p) => { p.hidden = p.dataset.panel !== tab; });
+  $$('.panel').forEach((p) => {
+    p.hidden = p.dataset.panel !== tab;
+    // 換到別的分頁時內容淡入
+    if (!p.hidden && was && was !== tab) { p.classList.remove('panel-in'); void p.offsetWidth; p.classList.add('panel-in'); }
+  });
+  moveInk(Boolean(was));
   remember('ct-tab', tab);
 }
 $$('.tab').forEach((tb) => tb.addEventListener('click', () => {
@@ -27,6 +49,21 @@ $$('.tab').forEach((tb) => tb.addEventListener('click', () => {
   if (tb.dataset.tab !== 'roster' && tb.dataset.tab !== 'fun' && !S.roster.length) toast(t('ct.needRoster'), 'error');
   showTab(tb.dataset.tab);
 }));
+// 滑鼠滾輪／觸控板在分頁列上滑動：往下是下一頁、往上是上一頁（累積到一定距離才換，換完停一下，觸控板才不會一次跳好幾頁）
+let wheelSum = 0, wheelLock = 0, wheelIdle = 0;
+tabsNav.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  clearTimeout(wheelIdle);
+  wheelIdle = setTimeout(() => { wheelSum = 0; }, 200);
+  if (performance.now() < wheelLock) return;
+  wheelSum += Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+  if (Math.abs(wheelSum) < 40) return;
+  const tabs = $$('.tab', tabsNav), i = tabs.findIndex((x) => x.getAttribute('aria-selected') === 'true');
+  const next = tabs[Math.max(0, Math.min(tabs.length - 1, i + Math.sign(wheelSum)))];
+  wheelSum = 0;
+  wheelLock = performance.now() + 280;
+  if (next && next !== tabs[i]) next.click();
+}, { passive: false });
 
 // ================= 班級 =================
 if (!listClasses().length) createClass(t('ct.defaultClass'));
